@@ -533,6 +533,170 @@
       border-color: #93C5FD;
     }
 
+    /* ── CALENDARIO ──────────────────────────────────── */
+    .cal-intestazione {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 3px;
+      margin-bottom: 3px;
+    }
+    .cal-giorno-sett {
+      text-align: center;
+      font-size: 0.66rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #8695A6;
+      padding: 4px 0;
+    }
+    .cal-griglia {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 3px;
+    }
+    .cal-cella {
+      background: #fff;
+      border-radius: 7px;
+      min-height: 62px;
+      padding: 3px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      cursor: pointer;
+      border: 1.5px solid transparent;
+      overflow: hidden;
+      transition: border-color 0.12s;
+    }
+    .cal-cella:active { border-color: #2563EB; }
+    .cal-cella.vuota-mese {
+      background: transparent;
+      cursor: default;
+      border: none;
+    }
+    .cal-cella.oggi { border-color: #2563EB; }
+    .cal-cella.domenica .cal-numero { color: #DC2626; }
+
+    .cal-numero {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #475569;
+      line-height: 1;
+      padding: 1px 2px;
+    }
+
+    /* Mini-turno dentro la cella */
+    .cal-turno {
+      border-radius: 4px;
+      padding: 2px 3px;
+      color: #fff;
+      line-height: 1.1;
+      overflow: hidden;
+    }
+    .cal-turno-fascia {
+      font-size: 0.6rem;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .cal-turno-ore {
+      font-size: 0.55rem;
+      opacity: 0.95;
+      white-space: nowrap;
+    }
+    .cal-badge-riga {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1px;
+      margin-top: 1px;
+    }
+    .cal-badge {
+      font-size: 0.5rem;
+      line-height: 1;
+    }
+    /* indicatore "+N" quando i turni non entrano tutti */
+    .cal-piu {
+      font-size: 0.55rem;
+      font-weight: 700;
+      color: #64748B;
+      text-align: center;
+    }
+
+    /* Legenda colori sotto la griglia */
+    .cal-legenda {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+      padding: 12px;
+      background: #fff;
+      border-radius: 12px;
+    }
+    .cal-legenda-voce {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.74rem;
+      color: #475569;
+    }
+    .cal-legenda-pallino {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    /* Mini-popup scelta turno (più turni nello stesso giorno) */
+    .cal-scelta-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(28,43,58,0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 500;
+      padding: 24px;
+    }
+    .cal-scelta-overlay.visibile { display: flex; }
+    .cal-scelta-box {
+      background: #fff;
+      border-radius: 16px;
+      padding: 18px;
+      width: 100%;
+      max-width: 340px;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+    .cal-scelta-titolo {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #1C2B3A;
+    }
+    .cal-scelta-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 11px 12px;
+      border-radius: 9px;
+      background: #F4F7FA;
+      margin-bottom: 7px;
+      cursor: pointer;
+      border-left: 4px solid #CBD5E1;
+    }
+    .cal-scelta-item:active { background: #E8EEF4; }
+    .cal-scelta-info { flex: 1; font-size: 0.85rem; color: #334155; }
+    .cal-scelta-nuovo {
+      text-align: center;
+      padding: 11px;
+      border-radius: 9px;
+      background: #EFF6FF;
+      color: #2563EB;
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+
     /* ── TOAST ────────────────────────────────────────── */
     #toast {
       position: fixed;
@@ -578,6 +742,7 @@
   <button id="tab-aggiungi"      class="active"  onclick="apriTab('aggiungi')">➕ Turno</button>
   <button id="tab-lista"                         onclick="apriTab('lista')">📋 Lista</button>
   <button id="tab-riepilogo"                     onclick="apriTab('riepilogo')">📊 Mese</button>
+  <button id="tab-calendario"                    onclick="apriTab('calendario')">📅 Cal.</button>
   <button id="tab-impostazioni"                  onclick="apriTab('impostazioni')">⚙️ Importi</button>
 </div>
 
@@ -714,6 +879,20 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════════════
+     SEZIONE 5 — CALENDARIO MENSILE
+═══════════════════════════════════════════════════════ -->
+<div id="sezione-calendario" class="sezione">
+  <div class="filtro-mese">
+    <select id="filtro-calendario" onchange="renderCalendario()">
+      <!-- Popolato dinamicamente -->
+    </select>
+  </div>
+  <div id="contenuto-calendario">
+    <!-- Griglia generata dinamicamente -->
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
      SEZIONE 4 — IMPOSTAZIONI INDENNITÀ
 ═══════════════════════════════════════════════════════ -->
 <div id="sezione-impostazioni" class="sezione">
@@ -771,6 +950,14 @@
     <button class="btn btn-pericolo" onclick="cancellaTuttiIDati()">🗑 Cancella tutti i dati</button>
   </div>
 
+</div>
+
+<!-- Overlay scelta turno (più turni nello stesso giorno) -->
+<div id="cal-scelta-overlay" class="cal-scelta-overlay" onclick="chiudiSceltaGiorno(event)">
+  <div class="cal-scelta-box" onclick="event.stopPropagation()">
+    <div class="cal-scelta-titolo" id="cal-scelta-titolo">Turni del giorno</div>
+    <div id="cal-scelta-lista"></div>
+  </div>
 </div>
 
 <!-- Toast di notifica -->
@@ -944,6 +1131,7 @@ function apriTab(nome) {
   // Aggiorna il contenuto quando si entra nella sezione
   if (nome === 'lista')         renderLista();
   if (nome === 'riepilogo')     renderRiepilogo();
+  if (nome === 'calendario')    renderCalendario();
   if (nome === 'impostazioni')  renderImpostazioni();
 }
 
@@ -1701,6 +1889,175 @@ function aggiornaEtichetteStra() {
     `Notturno o festivo <small>${euro(imp.straNottFest)}/h</small>`;
   document.getElementById('label-stra-speciale').innerHTML =
     `Notturno-festivo speciale <small>${euro(imp.straSpeciale)}/h</small>`;
+}
+
+// ─────────────────────────────────────────────────────────
+//  CALENDARIO MENSILE
+//  Disegna una griglia (lunedì-domenica) leggendo i turni
+//  già salvati. È solo una VISTA: non cambia come i dati
+//  sono memorizzati né come vengono calcolate le indennità.
+// ─────────────────────────────────────────────────────────
+
+// Badge compatti mostrati nella cella: chiave flag → emoji
+const CAL_BADGE = {
+  festivo:       '🎉',
+  nottIdx:       '🌙',
+  opSede:        '🛡',
+  opFuori1:      '🚌',
+  opFuoriIntera: '🚍',
+  missione:      '✈️',
+  reperibilita:  '📞',
+  formazione:    '📚'
+};
+
+function renderCalendario() {
+  popolaSelettoreMese('filtro-calendario');
+
+  const mese = document.getElementById('filtro-calendario').value;
+  const el   = document.getElementById('contenuto-calendario');
+  const [anno, mm] = mese.split('-').map(Number);
+
+  // Raggruppa i turni del mese per giorno (chiave = data ISO)
+  const turniPerGiorno = {};
+  caricaTurni().forEach(t => {
+    if (t.data && t.data.startsWith(mese)) {
+      (turniPerGiorno[t.data] = turniPerGiorno[t.data] || []).push(t);
+    }
+  });
+
+  // Quanti giorni ha il mese
+  const giorniMese = new Date(anno, mm, 0).getDate();
+
+  // Giorno della settimana del 1° del mese, con LUNEDÌ = 0.
+  // getDay() dà domenica=0..sabato=6, quindi convertiamo.
+  const primo = new Date(anno, mm - 1, 1).getDay();   // 0=dom..6=sab
+  const offset = (primo + 6) % 7;                      // 0=lun..6=dom
+
+  const oggiIso = oggiISO();
+
+  // Intestazione giorni della settimana
+  let html = '<div class="cal-intestazione">';
+  ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'].forEach(g => {
+    html += `<div class="cal-giorno-sett">${g}</div>`;
+  });
+  html += '</div><div class="cal-griglia">';
+
+  // Celle vuote prima del primo giorno
+  for (let i = 0; i < offset; i++) {
+    html += '<div class="cal-cella vuota-mese"></div>';
+  }
+
+  // Celle dei giorni del mese
+  for (let g = 1; g <= giorniMese; g++) {
+    const dataIso = `${anno}-${String(mm).padStart(2, '0')}-${String(g).padStart(2, '0')}`;
+    const turni   = turniPerGiorno[dataIso] || [];
+    const dow     = new Date(anno, mm - 1, g).getDay();  // 0=dom
+    const classi  = ['cal-cella'];
+    if (dataIso === oggiIso) classi.push('oggi');
+    if (dow === 0)           classi.push('domenica');
+
+    let interno = `<div class="cal-numero">${g}</div>`;
+
+    // Mostra fino a 2 turni; se ce ne sono di più, indicatore "+N"
+    const daMostrare = turni.slice(0, 2);
+    daMostrare.forEach(t => {
+      const colore = COLORI[t.tipo] || '#94A3B8';
+      const badges = Object.keys(CAL_BADGE)
+        .filter(k => t.flags && t.flags[k])
+        .map(k => `<span class="cal-badge">${CAL_BADGE[k]}</span>`)
+        .join('');
+      // straordinario: badge ⏱ se almeno un campo ore è valorizzato
+      const haStra = t.stra && (t.stra.diurno || t.stra.nottFest || t.stra.speciale);
+      const badgeStra = haStra ? '<span class="cal-badge">⏱</span>' : '';
+      interno += `
+        <div class="cal-turno" style="background:${colore}">
+          <div class="cal-turno-fascia">${esc(t.tipo)}</div>
+          <div class="cal-turno-ore">${t.inizio}-${t.fine}</div>
+          <div class="cal-badge-riga">${badges}${badgeStra}</div>
+        </div>`;
+    });
+    if (turni.length > 2) {
+      interno += `<div class="cal-piu">+${turni.length - 2}</div>`;
+    }
+
+    html += `<div class="${classi.join(' ')}" onclick="toccaGiorno('${dataIso}')">${interno}</div>`;
+  }
+
+  html += '</div>';
+
+  // Legenda colori fasce
+  html += '<div class="cal-legenda">';
+  Object.entries(COLORI).forEach(([fascia, colore]) => {
+    html += `
+      <div class="cal-legenda-voce">
+        <div class="cal-legenda-pallino" style="background:${colore}"></div>
+        <span>${esc(fascia)}</span>
+      </div>`;
+  });
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
+// ─────────────────────────────────────────────────────────
+//  TOCCO SU UN GIORNO DEL CALENDARIO
+//  · nessun turno → nuovo turno con quella data
+//  · un turno     → modifica diretta
+//  · più turni    → mostra la scelta
+// ─────────────────────────────────────────────────────────
+
+function toccaGiorno(dataIso) {
+  const turni = caricaTurni()
+    .filter(t => t.data === dataIso)
+    .sort((a, b) => (a.inizio || '').localeCompare(b.inizio || ''));
+
+  if (turni.length === 0) {
+    nuovoTurnoConData(dataIso);
+  } else if (turni.length === 1) {
+    modificaTurno(turni[0].id);
+  } else {
+    mostraSceltaGiorno(dataIso, turni);
+  }
+}
+
+// Apre il form di inserimento già precompilato con la data scelta
+function nuovoTurnoConData(dataIso) {
+  resetForm();
+  document.getElementById('campo-data').value = dataIso;
+  apriTab('aggiungi');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Popup con l'elenco dei turni del giorno + opzione "aggiungi"
+function mostraSceltaGiorno(dataIso, turni) {
+  document.getElementById('cal-scelta-titolo').textContent =
+    'Turni del ' + formattaData(dataIso);
+
+  let html = '';
+  turni.forEach(t => {
+    const colore = COLORI[t.tipo] || '#94A3B8';
+    html += `
+      <div class="cal-scelta-item" style="border-left-color:${colore}"
+           onclick="chiudiSceltaGiorno(); modificaTurno('${t.id}')">
+        <div class="cal-scelta-info">
+          <strong>${esc(t.tipo)}</strong> · ${t.inizio}-${t.fine}
+        </div>
+      </div>`;
+  });
+  html += `
+    <div class="cal-scelta-nuovo"
+         onclick="chiudiSceltaGiorno(); nuovoTurnoConData('${dataIso}')">
+      ➕ Aggiungi un altro turno
+    </div>`;
+
+  document.getElementById('cal-scelta-lista').innerHTML = html;
+  document.getElementById('cal-scelta-overlay').classList.add('visibile');
+}
+
+function chiudiSceltaGiorno(event) {
+  // Se chiamata dal click sullo sfondo, chiude. Se chiamata da un
+  // pulsante interno (senza event), chiude comunque.
+  document.getElementById('cal-scelta-overlay').classList.remove('visibile');
 }
 
 // ─────────────────────────────────────────────────────────
