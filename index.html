@@ -532,6 +532,15 @@
       background: #DBEAFE;
       border-color: #93C5FD;
     }
+    .btn-modello-nonlav {
+      background: #F1F5F9;
+      border-color: #CBD5E1;
+      color: #475569;
+    }
+    .btn-modello-nonlav:active {
+      background: #E2E8F0;
+      border-color: #94A3B8;
+    }
 
     /* ── CALENDARIO ──────────────────────────────────── */
     .cal-intestazione {
@@ -603,15 +612,26 @@
       opacity: 0.95;
       white-space: nowrap;
     }
+    /* RS: blocchetto chiaro con testo scuro */
+    .cal-turno.cal-rs {
+      background: #E2E8F0;
+    }
+    .cal-turno.cal-rs .cal-turno-fascia { color: #475569; }
+    /* Assente: blocchetto ambrato */
+    .cal-turno.cal-assente {
+      background: #FDE68A;
+    }
+    .cal-turno.cal-assente .cal-turno-fascia { color: #92400E; }
     .cal-badge-riga {
       display: flex;
       flex-wrap: wrap;
-      gap: 1px;
-      margin-top: 1px;
+      gap: 3px 4px;
+      margin-top: 2px;
     }
     .cal-badge {
-      font-size: 0.5rem;
+      font-size: 0.6rem;
       line-height: 1;
+      display: inline-block;
     }
     /* indicatore "+N" quando i turni non entrano tutti */
     .cal-piu {
@@ -766,6 +786,8 @@
     <div class="modelli-lista">
       <button class="btn-modello" onclick="applicaModello('Mattina',   '06:48', '14:00')">🌅 Mattina  06:48–14:00</button>
       <button class="btn-modello" onclick="applicaModello('Pomeriggio','12:48', '20:00')">🌆 Pomeriggio  12:48–20:00</button>
+      <button class="btn-modello btn-modello-nonlav" onclick="applicaStato('RS')">🛌 RS</button>
+      <button class="btn-modello btn-modello-nonlav" onclick="applicaStato('Assente')">🚫 Assente</button>
     </div>
 
     <div class="campo">
@@ -1161,27 +1183,36 @@ function salvaTurno() {
   const sede   = document.getElementById('campo-sede').value.trim();
   const note   = document.getElementById('campo-note').value.trim();
 
+  // Una giornata RS o Assente è uno STATO non lavorativo, non un turno.
+  // Lo riconosciamo dal tipo selezionato.
+  const stato = (tipo === 'RS' || tipo === 'Assente') ? tipo : '';
+
   // ── Validazione ──
   if (!data)   { alert('Inserisci la data.'); return; }
-  if (!inizio) { alert("Inserisci l'ora di inizio."); return; }
-  if (!fine)   { alert("Inserisci l'ora di fine."); return; }
   if (!tipo)   { alert('Seleziona il tipo di turno.'); return; }
+  if (!stato) {
+    // Solo i turni lavorati richiedono gli orari
+    if (!inizio) { alert("Inserisci l'ora di inizio."); return; }
+    if (!fine)   { alert("Inserisci l'ora di fine."); return; }
+  }
 
-  const durata = calcolaMinuti(inizio, fine);
+  // Per RS/Assente: durata 0, nessuna caratteristica, nessuno straordinario
+  const durata = stato ? 0 : calcolaMinuti(inizio, fine);
 
-  // Raccoglie lo stato di tutti i checkbox in un oggetto:
-  // es. { festivo: true, opSede: false, ... }
   const flags = {};
-  FLAGS.forEach(f => {
-    flags[f.chiave] = document.getElementById(f.id).checked;
-  });
+  if (!stato) {
+    FLAGS.forEach(f => { flags[f.chiave] = document.getElementById(f.id).checked; });
+  } else {
+    FLAGS.forEach(f => { flags[f.chiave] = false; });
+  }
 
-  // Raccoglie le ore di straordinario (accetta virgola o punto)
-  const stra = {
-    diurno:   leggiNumero(document.getElementById('stra-diurno').value),
-    nottFest: leggiNumero(document.getElementById('stra-nottfest').value),
-    speciale: leggiNumero(document.getElementById('stra-speciale').value)
-  };
+  const stra = stato
+    ? { diurno: 0, nottFest: 0, speciale: 0 }
+    : {
+        diurno:   leggiNumero(document.getElementById('stra-diurno').value),
+        nottFest: leggiNumero(document.getElementById('stra-nottfest').value),
+        speciale: leggiNumero(document.getElementById('stra-speciale').value)
+      };
 
   const turni = caricaTurni();
 
@@ -1189,20 +1220,20 @@ function salvaTurno() {
     // ── Modalità MODIFICA ──
     const idx = turni.findIndex(t => t.id === id);
     if (idx !== -1) {
-      turni[idx] = { id, data, inizio, fine, tipo, sede, note, durata, flags, stra };
+      turni[idx] = { id, data, inizio, fine, tipo, sede, note, durata, flags, stra, stato };
     }
     salvaTurniStorage(turni);
     resetForm();
-    toast('✅ Turno aggiornato');
+    toast('✅ Aggiornato');
   } else {
     // ── Modalità NUOVO ──
     turni.push({
       id: Date.now().toString(),  // ID unico basato sul timestamp
-      data, inizio, fine, tipo, sede, note, durata, flags, stra
+      data, inizio, fine, tipo, sede, note, durata, flags, stra, stato
     });
     salvaTurniStorage(turni);
     resetForm();
-    toast('✅ Turno salvato');
+    toast('✅ Salvato');
   }
 }
 
@@ -1250,7 +1281,15 @@ function modificaTurno(id) {
   document.getElementById('campo-data').value   = t.data;
   document.getElementById('campo-inizio').value = t.inizio;
   document.getElementById('campo-fine').value   = t.fine;
-  document.getElementById('campo-tipo').value   = t.tipo;
+  // Se è uno stato non lavorativo (RS/Assente), assicuriamoci che
+  // l'opzione esista nel menu prima di selezionarla
+  const selTipo = document.getElementById('campo-tipo');
+  if (t.tipo && ![...selTipo.options].some(o => o.value === t.tipo)) {
+    const opt = document.createElement('option');
+    opt.value = t.tipo; opt.textContent = t.tipo;
+    selTipo.appendChild(opt);
+  }
+  selTipo.value = t.tipo;
   document.getElementById('campo-sede').value   = t.sede  || '';
   document.getElementById('campo-note').value   = t.note  || '';
 
@@ -1347,7 +1386,7 @@ function renderLista() {
   }
 
   el.innerHTML = turni.map(t => {
-    const colore   = COLORI[t.tipo] || '#94A3B8';
+    const colore   = t.stato === 'RS' ? '#94A3B8' : (t.stato === 'Assente' ? '#D97706' : (COLORI[t.tipo] || '#94A3B8'));
     const sedeHtml = t.sede ? `<div class="turno-sede">📍 ${esc(t.sede)}</div>` : '';
     const noteHtml = t.note ? `<div class="turno-note">📝 ${esc(t.note)}</div>` : '';
     const notturno = t.fine && t.inizio && t.fine <= t.inizio ? ' 🌙' : '';
@@ -1360,16 +1399,21 @@ function renderLista() {
       .join('');
     const flagsRiga = flagHtml ? `<div class="turno-flags">${flagHtml}</div>` : '';
 
+    // RS/Assente: nessuna riga orario, solo l'etichetta dello stato
+    const rigaOre = t.stato
+      ? `<div class="turno-ore">${t.stato === 'RS' ? '🛌 Riposo settimanale' : '🚫 Giornata di assenza'}</div>`
+      : `<div class="turno-ore">
+          🕐 ${t.inizio} → ${t.fine}${notturno}
+          &nbsp;&nbsp;<strong>${formattaMinuti(t.durata)}</strong>
+        </div>`;
+
     return `
       <div class="turno-item" style="border-left-color:${colore}">
         <div class="turno-top">
           <div class="turno-data-giorno">${formattaData(t.data)}</div>
           <div class="badge" style="background:${colore}">${esc(t.tipo)}</div>
         </div>
-        <div class="turno-ore">
-          🕐 ${t.inizio} → ${t.fine}${notturno}
-          &nbsp;&nbsp;<strong>${formattaMinuti(t.durata)}</strong>
-        </div>
+        ${rigaOre}
         ${flagsRiga}
         ${sedeHtml}
         ${noteHtml}
@@ -1403,9 +1447,18 @@ function renderLista() {
 // ─────────────────────────────────────────────────────────
 
 function calcolaRiepilogoMese(mese) {
-  const turni = caricaTurni()
+  const tutti = caricaTurni()
     .filter(t => t.data && t.data.startsWith(mese))
     .sort((a, b) => a.data.localeCompare(b.data));  // ordine cronologico
+
+  // Separa i turni lavorati dalle giornate non lavorative (RS/Assente).
+  // Solo i turni lavorati entrano in ore, fasce, caratteristiche e indennità.
+  const turni    = tutti.filter(t => !t.stato);
+  const nonLavor = tutti.filter(t => t.stato);
+
+  // Conteggio giornate non lavorative per tipo (RS, Assente)
+  const contaNonLav = {};
+  nonLavor.forEach(t => { contaNonLav[t.stato] = (contaNonLav[t.stato] || 0) + 1; });
 
   // ── Minuti totali ──
   const totMin = turni.reduce((s, t) => s + (t.durata || 0), 0);
@@ -1469,7 +1522,7 @@ function calcolaRiepilogoMese(mese) {
 
   const totale = voci.reduce((s, v) => s + v.importo, 0);
 
-  return { turni, totMin, perFascia, contaFlag, oreStra, voci, totale };
+  return { turni, totMin, perFascia, contaFlag, oreStra, voci, totale, nonLavor, contaNonLav };
 }
 
 function renderRiepilogo() {
@@ -1481,7 +1534,7 @@ function renderRiepilogo() {
   // ★ Tutto il calcolo avviene nella funzione centrale
   const r = calcolaRiepilogoMese(mese);
 
-  if (r.turni.length === 0) {
+  if (r.turni.length === 0 && r.nonLavor.length === 0) {
     el.innerHTML = `
       <div class="card">
         <div class="vuoto">
@@ -1574,21 +1627,38 @@ function renderRiepilogo() {
     </div>
     <div class="disclaimer-grande">⚠️ STIMA PERSONALE NON UFFICIALE</div>` : '';
 
+  // ── Righe giornate non lavorative (RS / Assente) ──
+  const etichetteNonLav = { 'RS': '🛌 Riposo settimanale', 'Assente': '🚫 Assente' };
+  const righeNonLav = Object.entries(r.contaNonLav).map(([stato, n]) => `
+    <div class="riepilogo-riga">
+      <div class="riga-sinistra"><span>${esc(etichetteNonLav[stato] || stato)}</span></div>
+      <div class="riga-destra">${n} giorni</div>
+    </div>`).join('');
+
+  const sezioneNonLav = righeNonLav ? `
+    <div class="riepilogo-sottotitolo">Giornate non lavorative</div>
+    ${righeNonLav}` : '';
+
   const [anno, mm] = mese.split('-');
+
+  // Le sezioni dei turni lavorati hanno senso solo se ce ne sono
+  const sezioniLavoro = numTurni > 0 ? `
+      <div class="riepilogo-sottotitolo">Fasce orarie</div>
+      ${righeFasce}
+      ${sezioneFlag}
+      <div class="riepilogo-sottotitolo">Ore straordinario</div>
+      ${righeStra}
+      ${sezioneIndennita}` : '';
 
   el.innerHTML = `
     <div class="card">
       <div class="card-titolo">📊 ${nomeMese(parseInt(mm))} ${anno}</div>
       <div class="riepilogo-grande">
         <div class="numero-grande">${totOre}<span style="font-size:1.4rem">h</span></div>
-        <div class="numero-grande-label">ore lavorate · ${numTurni} turni in totale</div>
+        <div class="numero-grande-label">ore lavorate · ${numTurni} turni lavorati</div>
       </div>
-      <div class="riepilogo-sottotitolo">Fasce orarie</div>
-      ${righeFasce}
-      ${sezioneFlag}
-      <div class="riepilogo-sottotitolo">Ore straordinario</div>
-      ${righeStra}
-      ${sezioneIndennita}
+      ${sezioniLavoro}
+      ${sezioneNonLav}
     </div>`;
 }
 
@@ -1658,7 +1728,7 @@ function esportaCSV() {
   //   Il totale del CSV coincide sempre con quello a schermo.
   const r = calcolaRiepilogoMese(mese);
 
-  if (r.turni.length === 0) {
+  if (r.turni.length === 0 && r.nonLavor.length === 0) {
     alert('Nessun turno in questo mese: niente da esportare.');
     return;
   }
@@ -1669,7 +1739,7 @@ function esportaCSV() {
   // ══ SEZIONE 1: elenco turni ══════════════════════════
   righe.push('ELENCO TURNI ' + mese);
   righe.push([
-    'data', 'ora inizio', 'ora fine', 'durata ore', 'fascia',
+    'data', 'stato', 'ora inizio', 'ora fine', 'durata ore', 'fascia',
     'festivo', 'indennità servizio notturno', 'OP sede',
     'OP fuori sede 1 turno', 'OP fuori sede intera/grandi eventi',
     'missione', 'reperibilità', 'presenza servizi esterni',
@@ -1678,13 +1748,18 @@ function esportaCSV() {
     'straordinario speciale ore', 'sede', 'note'
   ].join(';'));
 
-  r.turni.forEach(t => {
+  // Unisce turni lavorati e giornate non lavorative, in ordine di data
+  const elenco = r.turni.concat(r.nonLavor)
+    .sort((a, b) => a.data.localeCompare(b.data));
+
+  elenco.forEach(t => {
     const f = t.flags || {};
     const s = t.stra  || {};
     righe.push([
       t.data,
-      t.inizio,
-      t.fine,
+      csvCampo(t.stato || 'lavorato'),
+      t.inizio || '',
+      t.fine || '',
       csvNumero((t.durata || 0) / 60, 2),
       csvCampo(t.tipo),
       siNo(f.festivo),
@@ -1722,6 +1797,19 @@ function esportaCSV() {
   });
 
   righe.push(['TOTALE STIMATO', '', '', csvNumero(r.totale, 2)].join(';'));
+
+  // ══ SEZIONE 3: giornate non lavorative (RS / Assente) ══
+  const etichetteNonLav = { 'RS': 'Riposo settimanale (RS)', 'Assente': 'Assente' };
+  const vociNonLav = Object.entries(r.contaNonLav);
+  if (vociNonLav.length > 0) {
+    righe.push('');
+    righe.push('GIORNATE NON LAVORATIVE ' + mese);
+    righe.push(['voce', 'giorni'].join(';'));
+    vociNonLav.forEach(([stato, n]) => {
+      righe.push([csvCampo(etichetteNonLav[stato] || stato), n].join(';'));
+    });
+  }
+
   righe.push('');
   righe.push('STIMA PERSONALE NON UFFICIALE');
 
@@ -1961,6 +2049,14 @@ function renderCalendario() {
     // Mostra fino a 2 turni; se ce ne sono di più, indicatore "+N"
     const daMostrare = turni.slice(0, 2);
     daMostrare.forEach(t => {
+      if (t.stato === 'RS') {
+        interno += `<div class="cal-turno cal-rs"><div class="cal-turno-fascia">🛌 RS</div></div>`;
+        return;
+      }
+      if (t.stato === 'Assente') {
+        interno += `<div class="cal-turno cal-assente"><div class="cal-turno-fascia">🚫 Assente</div></div>`;
+        return;
+      }
       const colore = COLORI[t.tipo] || '#94A3B8';
       const badges = Object.keys(CAL_BADGE)
         .filter(k => t.flags && t.flags[k])
@@ -1994,6 +2090,16 @@ function renderCalendario() {
         <span>${esc(fascia)}</span>
       </div>`;
   });
+  // Voci stati non lavorativi
+  html += `
+    <div class="cal-legenda-voce">
+      <div class="cal-legenda-pallino" style="background:#E2E8F0"></div>
+      <span>RS</span>
+    </div>
+    <div class="cal-legenda-voce">
+      <div class="cal-legenda-pallino" style="background:#FDE68A"></div>
+      <span>Assente</span>
+    </div>`;
   html += '</div>';
 
   el.innerHTML = html;
@@ -2035,12 +2141,13 @@ function mostraSceltaGiorno(dataIso, turni) {
 
   let html = '';
   turni.forEach(t => {
-    const colore = COLORI[t.tipo] || '#94A3B8';
+    const colore = t.stato === 'RS' ? '#94A3B8' : (t.stato === 'Assente' ? '#D97706' : (COLORI[t.tipo] || '#94A3B8'));
+    const dettaglio = t.stato ? '' : ' · ' + t.inizio + '-' + t.fine;
     html += `
       <div class="cal-scelta-item" style="border-left-color:${colore}"
            onclick="chiudiSceltaGiorno(); modificaTurno('${t.id}')">
         <div class="cal-scelta-info">
-          <strong>${esc(t.tipo)}</strong> · ${t.inizio}-${t.fine}
+          <strong>${esc(t.tipo)}</strong>${dettaglio}
         </div>
       </div>`;
   });
@@ -2119,8 +2226,41 @@ function applicaModello(tipo, inizio, fine) {
 }
 
 // ─────────────────────────────────────────────────────────
-//  INIZIALIZZAZIONE al caricamento della pagina
+//  STATI NON LAVORATIVI (RS / Assente)
+//  Marcano la giornata come non lavorata. Il record viene
+//  comunque salvato come "turno" ma con campo stato valorizzato:
+//  il motore di calcolo lo riconosce e lo esclude da ore e
+//  indennità, contandolo solo tra le giornate non lavorative.
 // ─────────────────────────────────────────────────────────
+
+function applicaStato(stato) {
+  // Svuota orari (durata 0)
+  document.getElementById('campo-inizio').value = '';
+  document.getElementById('campo-fine').value   = '';
+  // La fascia/tipo diventa lo stato stesso (RS o Assente)
+  // Aggiungiamo l'opzione al volo se non presente nel menu
+  const sel = document.getElementById('campo-tipo');
+  if (![...sel.options].some(o => o.value === stato)) {
+    const opt = document.createElement('option');
+    opt.value = stato; opt.textContent = stato;
+    sel.appendChild(opt);
+  }
+  sel.value = stato;
+
+  // Spegne tutte le caratteristiche di servizio
+  FLAGS.forEach(f => { document.getElementById(f.id).checked = false; });
+  // Azzera lo straordinario
+  document.getElementById('stra-diurno').value   = '';
+  document.getElementById('stra-nottfest').value = '';
+  document.getElementById('stra-speciale').value = '';
+  document.getElementById('durata-preview').textContent = '';
+
+  if (stato === 'Assente') {
+    // Per Assente lasciamo le note in evidenza (ferie, malattia, ecc.)
+    document.getElementById('campo-note').focus();
+  }
+  toast(stato === 'RS' ? '🛌 Riposo settimanale' : '🚫 Giornata di assenza');
+}
 
 document.addEventListener('DOMContentLoaded', function () {
   // Imposta la data di oggi nel form
