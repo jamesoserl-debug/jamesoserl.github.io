@@ -1,0 +1,1792 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Turni PS</title>
+
+  <!-- ── CONFIGURAZIONE PWA ──────────────────────────────
+       Questi tag rendono l'app installabile sul telefono.
+       I percorsi iniziano con ./ così funzionano anche dentro
+       la sottocartella di GitHub Pages. -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#1C2B3A">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Turni PS">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <style>
+
+    /* ── RESET E BASE ─────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #EEF2F7;
+      color: #1C2B3A;
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ───────────────────────────────────────── */
+    header {
+      background: #1C2B3A;
+      color: #fff;
+      padding: 14px 16px 12px;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    header .logo { font-size: 1.5rem; }
+    header h1   { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.01em; }
+    header p    { font-size: 0.75rem; opacity: 0.6; margin-top: 1px; }
+
+    /* ── TAB BAR ──────────────────────────────────────── */
+    .tabbar {
+      display: flex;
+      background: #fff;
+      border-bottom: 1px solid #DDE3EC;
+      position: sticky;
+      top: 58px;
+      z-index: 100;
+    }
+    .tabbar button {
+      flex: 1;
+      padding: 11px 4px;
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #8695A6;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tabbar button.active {
+      color: #1C2B3A;
+      border-bottom-color: #2563EB;
+    }
+
+    /* ── SEZIONI ──────────────────────────────────────── */
+    .sezione { display: none; padding: 14px 14px 80px; }
+    .sezione.attiva { display: block; }
+
+    /* ── CARD ─────────────────────────────────────────── */
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .card-titolo {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #1C2B3A;
+      margin-bottom: 14px;
+    }
+
+    /* ── FORM ─────────────────────────────────────────── */
+    .campo { margin-bottom: 13px; }
+    .campo label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #6B7E91;
+      margin-bottom: 5px;
+    }
+    .campo input,
+    .campo select,
+    .campo textarea {
+      width: 100%;
+      padding: 12px 13px;
+      background: #F4F7FA;
+      border: 1.5px solid #DDE3EC;
+      border-radius: 9px;
+      font-size: 1rem;
+      color: #1C2B3A;
+      -webkit-appearance: none;
+      appearance: none;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .campo input:focus,
+    .campo select:focus,
+    .campo textarea:focus {
+      outline: none;
+      border-color: #2563EB;
+      background: #fff;
+    }
+    .campo textarea { resize: none; height: 70px; }
+
+    .riga-due {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    /* Preview durata calcolata */
+    #durata-preview {
+      font-size: 0.82rem;
+      color: #2563EB;
+      font-weight: 600;
+      margin: -6px 0 12px;
+      min-height: 18px;
+      text-align: right;
+    }
+
+    /* Banner modifica */
+    #banner-modifica {
+      display: none;
+      background: #FFF8E7;
+      border: 1px solid #FBBF24;
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 0.82rem;
+      color: #92400E;
+      margin-bottom: 12px;
+    }
+
+    /* ── PULSANTI ─────────────────────────────────────── */
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.97rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.98); opacity: 0.85; }
+    .btn-primary   { background: #2563EB; color: #fff; }
+    .btn-annulla   { background: #F1F5F9; color: #64748B; margin-top: 8px; display: none; }
+    .btn-backup    { background: #F1F5F9; color: #1C2B3A; border: 1.5px solid #DDE3EC; margin-bottom: 8px; }
+    .btn-pericolo  { background: #FEF2F2; color: #DC2626; border: 1.5px solid #FECACA; }
+
+    /* ── FILTRO MESE ──────────────────────────────────── */
+    .filtro-mese {
+      margin-bottom: 12px;
+    }
+    .filtro-mese select {
+      width: 100%;
+      padding: 10px 13px;
+      background: #fff;
+      border: 1.5px solid #DDE3EC;
+      border-radius: 9px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #1C2B3A;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    /* ── CARD TURNO (lista) ───────────────────────────── */
+    .turno-item {
+      background: #fff;
+      border-radius: 12px;
+      padding: 13px 14px;
+      margin-bottom: 9px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      border-left: 4px solid #CBD5E1;
+    }
+    .turno-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 5px;
+    }
+    .turno-data-giorno {
+      font-size: 0.93rem;
+      font-weight: 700;
+      color: #1C2B3A;
+    }
+    .badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 20px;
+      color: #fff;
+      white-space: nowrap;
+    }
+    .turno-ore {
+      font-size: 0.88rem;
+      color: #475569;
+      margin-bottom: 3px;
+    }
+    .turno-flags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin: 5px 0 3px;
+    }
+    .mini-flag {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: #F1F5F9;
+      color: #475569;
+      border: 1px solid #E2E8F0;
+      white-space: nowrap;
+    }
+    .turno-sede {
+      font-size: 0.82rem;
+      color: #64748B;
+    }
+    .turno-note {
+      font-size: 0.78rem;
+      color: #94A3B8;
+      font-style: italic;
+      margin-top: 3px;
+    }
+    .turno-azioni {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .btn-azione {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.83rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn-azione:active { opacity: 0.7; }
+    .btn-modifica { background: #EFF6FF; color: #2563EB; }
+    .btn-elimina  { background: #FEF2F2; color: #DC2626; }
+
+    /* ── RIEPILOGO ────────────────────────────────────── */
+    .riepilogo-grande {
+      text-align: center;
+      padding: 16px 0 14px;
+      border-bottom: 1px solid #EEF2F7;
+      margin-bottom: 14px;
+    }
+    .numero-grande {
+      font-size: 2.8rem;
+      font-weight: 800;
+      color: #1C2B3A;
+      line-height: 1;
+    }
+    .numero-grande-label {
+      font-size: 0.8rem;
+      color: #8695A6;
+      margin-top: 4px;
+    }
+
+    .riepilogo-sottotitolo {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #6B7E91;
+      margin: 14px 0 4px;
+    }
+
+    .riepilogo-riga {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 0;
+      border-bottom: 1px solid #F4F7FA;
+    }
+    .riepilogo-riga:last-child { border-bottom: none; }
+
+    .riga-sinistra {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 0.88rem;
+      color: #334155;
+    }
+    .pallino {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .riga-destra {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #1C2B3A;
+      text-align: right;
+    }
+    .riga-destra small {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 400;
+      color: #94A3B8;
+      margin-top: 1px;
+    }
+
+    /* ── STATO VUOTO ──────────────────────────────────── */
+    .vuoto {
+      text-align: center;
+      color: #94A3B8;
+      padding: 40px 20px;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+    .vuoto-icona { font-size: 2.5rem; margin-bottom: 10px; }
+
+    /* ── FLAG CHECKBOX (caratteristiche servizio) ────── */
+    .flags-griglia {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+    .flag-chip {
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .flag-chip input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .flag-chip span {
+      padding: 8px 13px;
+      background: #F4F7FA;
+      border: 1.5px solid #DDE3EC;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #64748B;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    .flag-chip input:checked + span {
+      background: #1C2B3A;
+      border-color: #1C2B3A;
+      color: #fff;
+    }
+
+    /* ── STRAORDINARIO NEL FORM ──────────────────────── */
+    .stra-righe { display: flex; flex-direction: column; gap: 8px; }
+    .stra-riga {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .stra-label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #475569;
+      line-height: 1.3;
+      flex: 1;
+    }
+    .stra-label small {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #2563EB;
+    }
+    .stra-riga input {
+      width: 80px;
+      flex-shrink: 0;
+      padding: 10px 8px;
+      background: #F4F7FA;
+      border: 1.5px solid #DDE3EC;
+      border-radius: 9px;
+      font-size: 1rem;
+      text-align: center;
+      color: #1C2B3A;
+    }
+    .stra-riga input:focus {
+      outline: none;
+      border-color: #2563EB;
+      background: #fff;
+    }
+
+    /* ── IMPOSTAZIONI INDENNITÀ ──────────────────────── */
+    .imp-riga {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid #F4F7FA;
+      font-size: 0.85rem;
+      color: #334155;
+    }
+    .imp-riga:last-child { border-bottom: none; }
+    .imp-riga input,
+    .imp-riga-toggle input[type="text"] {
+      width: 90px;
+      flex-shrink: 0;
+      padding: 9px 10px;
+      background: #F4F7FA;
+      border: 1.5px solid #DDE3EC;
+      border-radius: 9px;
+      font-size: 0.95rem;
+      text-align: right;
+      color: #1C2B3A;
+    }
+    .imp-riga input:focus,
+    .imp-riga-toggle input[type="text"]:focus {
+      outline: none;
+      border-color: #2563EB;
+      background: #fff;
+    }
+    .imp-riga-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 0;
+      border-bottom: 1px solid #F4F7FA;
+    }
+    .imp-riga-toggle:last-child { border-bottom: none; }
+    .imp-toggle-nome {
+      flex: 1;
+      font-size: 0.82rem;
+      color: #334155;
+      line-height: 1.3;
+    }
+    .imp-nota {
+      font-size: 0.76rem;
+      color: #94A3B8;
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+
+    /* ── DISCLAIMER ──────────────────────────────────── */
+    .disclaimer-box {
+      background: #FEF3C7;
+      border: 1.5px solid #F59E0B;
+      border-radius: 10px;
+      padding: 11px 13px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #92400E;
+      margin-bottom: 12px;
+      line-height: 1.45;
+    }
+    .disclaimer-grande {
+      background: #FEF3C7;
+      border: 2px solid #F59E0B;
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+      font-size: 0.85rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      color: #92400E;
+      margin: 12px 0 4px;
+    }
+
+    /* ── TOTALE INDENNITÀ ────────────────────────────── */
+    .totale-indennita {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0 4px;
+      margin-top: 6px;
+      border-top: 2px solid #1C2B3A;
+      font-size: 1rem;
+      font-weight: 800;
+      color: #1C2B3A;
+    }
+
+    /* ── MODELLI RAPIDI ──────────────────────────────── */
+    .modelli-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #6B7E91;
+      margin-bottom: 7px;
+    }
+    .modelli-lista {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-bottom: 14px;
+    }
+    .btn-modello {
+      padding: 7px 12px;
+      background: #EFF6FF;
+      border: 1.5px solid #BFDBFE;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #1D4ED8;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .btn-modello:active {
+      background: #DBEAFE;
+      border-color: #93C5FD;
+    }
+
+    /* ── TOAST ────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      background: #1C2B3A;
+      color: #fff;
+      padding: 11px 22px;
+      border-radius: 30px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s, transform 0.25s;
+      z-index: 999;
+      white-space: nowrap;
+    }
+    #toast.visibile {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     HEADER
+═══════════════════════════════════════════════════════ -->
+<header>
+  <div class="logo">🚔</div>
+  <div>
+    <h1>Turni PS</h1>
+    <p>Registro personale — uso privato</p>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB BAR
+═══════════════════════════════════════════════════════ -->
+<div class="tabbar">
+  <button id="tab-aggiungi"      class="active"  onclick="apriTab('aggiungi')">➕ Turno</button>
+  <button id="tab-lista"                         onclick="apriTab('lista')">📋 Lista</button>
+  <button id="tab-riepilogo"                     onclick="apriTab('riepilogo')">📊 Mese</button>
+  <button id="tab-impostazioni"                  onclick="apriTab('impostazioni')">⚙️ Importi</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SEZIONE 1 — INSERIMENTO / MODIFICA TURNO
+═══════════════════════════════════════════════════════ -->
+<div id="sezione-aggiungi" class="sezione attiva">
+  <div class="card">
+
+    <div class="card-titolo" id="form-titolo">Nuovo turno</div>
+
+    <!-- Banner visibile solo in modalità modifica -->
+    <div id="banner-modifica">
+      ✏️ Stai modificando un turno esistente. Salva per confermare.
+    </div>
+
+    <!-- ID nascosto per sapere se stiamo modificando o creando -->
+    <input type="hidden" id="turno-id">
+
+    <div class="modelli-label">Modelli rapidi</div>
+    <div class="modelli-lista">
+      <button class="btn-modello" onclick="applicaModello('Mattina',   '06:48', '14:00')">🌅 Mattina  06:48–14:00</button>
+      <button class="btn-modello" onclick="applicaModello('Pomeriggio','12:48', '20:00')">🌆 Pomeriggio  12:48–20:00</button>
+    </div>
+
+    <div class="campo">
+      <label>Data</label>
+      <input type="date" id="campo-data">
+    </div>
+
+    <div class="riga-due">
+      <div class="campo">
+        <label>Ora inizio</label>
+        <input type="time" id="campo-inizio" placeholder="06:48">
+      </div>
+      <div class="campo">
+        <label>Ora fine</label>
+        <input type="time" id="campo-fine" placeholder="14:00">
+      </div>
+    </div>
+
+    <!-- Durata calcolata in tempo reale -->
+    <div id="durata-preview"></div>
+
+    <div class="campo">
+      <label>Fascia / Tipo turno</label>
+      <select id="campo-tipo">
+        <option value="">— Seleziona —</option>
+        <option value="Mattina">Mattina</option>
+        <option value="Pomeriggio">Pomeriggio</option>
+        <option value="Notte">Notte</option>
+        <option value="Giornata">Giornata</option>
+        <option value="Altro">Altro</option>
+      </select>
+    </div>
+
+    <div class="campo">
+      <label>Caratteristiche del servizio</label>
+      <div class="flags-griglia">
+        <label class="flag-chip"><input type="checkbox" id="flag-festivo"><span>🎉 Festivo</span></label>
+        <label class="flag-chip"><input type="checkbox" id="flag-nottidx"><span>🌙 Indennità servizio notturno</span></label>
+        <label class="flag-chip"><input type="checkbox" id="flag-opsede"><span>🛡 OP sede</span></label>
+        <label class="flag-chip"><input type="checkbox" id="flag-opfuori1"><span>🚌 OP fuori 1 turno</span></label>
+        <label class="flag-chip"><input type="checkbox" id="flag-opfuoriintera"><span>🚍 OP fuori intera/grandi eventi</span></label>
+        <label class="flag-chip"><input type="checkbox" id="flag-missione"><span>✈️ Missione</span></label>
+        <label class="flag-chip"><input type="checkbox" id="flag-reperibilita"><span>📞 Reperibilità</span></label>
+        <label class="flag-chip"><input type="checkbox" id="flag-serviziesterni"><span>🚶 Presenza servizi esterni</span></label>
+        <label class="flag-chip"><input type="checkbox" id="flag-ordigni"><span>💣 Disattivazione ordigni</span></label>
+        <label class="flag-chip"><input type="checkbox" id="flag-formazione"><span>📚 Formazione</span></label>
+      </div>
+    </div>
+
+    <div class="campo">
+      <label>Straordinario (ore, es. 1,5)</label>
+      <div class="stra-righe">
+        <div class="stra-riga">
+          <span class="stra-label" id="label-stra-diurno">Diurno</span>
+          <input type="text" inputmode="decimal" id="stra-diurno" placeholder="0">
+        </div>
+        <div class="stra-riga">
+          <span class="stra-label" id="label-stra-nottfest">Notturno o festivo</span>
+          <input type="text" inputmode="decimal" id="stra-nottfest" placeholder="0">
+        </div>
+        <div class="stra-riga">
+          <span class="stra-label" id="label-stra-speciale">Notturno-festivo speciale</span>
+          <input type="text" inputmode="decimal" id="stra-speciale" placeholder="0">
+        </div>
+      </div>
+    </div>
+
+    <div class="campo">
+      <label>Sede / Località</label>
+      <input type="text" id="campo-sede" placeholder="es. Questura di Roma">
+    </div>
+
+    <div class="campo">
+      <label>Note</label>
+      <textarea id="campo-note" placeholder="Annotazioni libere..."></textarea>
+    </div>
+
+    <button class="btn btn-primary" onclick="salvaTurno()">💾 Salva turno</button>
+    <button class="btn btn-annulla" id="btn-annulla" onclick="annullaModifica()">✕ Annulla modifica</button>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SEZIONE 2 — LISTA TURNI
+═══════════════════════════════════════════════════════ -->
+<div id="sezione-lista" class="sezione">
+  <div class="filtro-mese">
+    <select id="filtro-lista" onchange="renderLista()">
+      <!-- Popolato dinamicamente -->
+    </select>
+  </div>
+  <div id="contenuto-lista">
+    <!-- Turni inseriti dinamicamente -->
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SEZIONE 3 — RIEPILOGO MENSILE
+═══════════════════════════════════════════════════════ -->
+<div id="sezione-riepilogo" class="sezione">
+  <div class="filtro-mese">
+    <select id="filtro-riepilogo" onchange="renderRiepilogo()">
+      <!-- Popolato dinamicamente -->
+    </select>
+  </div>
+  <div id="contenuto-riepilogo">
+    <!-- Generato dinamicamente -->
+  </div>
+  <button class="btn btn-backup" onclick="esportaCSV()">📄 Esporta CSV mese corrente</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SEZIONE 4 — IMPOSTAZIONI INDENNITÀ
+═══════════════════════════════════════════════════════ -->
+<div id="sezione-impostazioni" class="sezione">
+
+  <div class="disclaimer-box">
+    ⚠️ Importi personali ricavati dalla propria busta paga.
+    Non sono valori normativi ufficiali. Tutti i calcoli sono stime.
+  </div>
+
+  <div class="card">
+    <div class="card-titolo">⏱ Straordinario (€/ora)</div>
+    <div class="imp-riga"><span>Diurno</span><input type="text" inputmode="decimal" id="imp-straDiurno"></div>
+    <div class="imp-riga"><span>Notturno/festivo</span><input type="text" inputmode="decimal" id="imp-straNottFest"></div>
+    <div class="imp-riga"><span>Notturno-festivo speciale</span><input type="text" inputmode="decimal" id="imp-straSpeciale"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-titolo">🌙 Indennità per turno/servizio (€)</div>
+    <div class="imp-riga"><span>Indennità servizio notturno (per turno con ✓)</span><input type="text" inputmode="decimal" id="imp-notturna"></div>
+    <div class="imp-riga"><span>Indennità festiva (per turno)</span><input type="text" inputmode="decimal" id="imp-festiva"></div>
+    <div class="imp-riga"><span>OP sede (per servizio)</span><input type="text" inputmode="decimal" id="imp-opSede"></div>
+    <div class="imp-riga"><span>OP fuori sede 1 turno</span><input type="text" inputmode="decimal" id="imp-opFuori1"></div>
+    <div class="imp-riga"><span>OP fuori intera/grandi eventi</span><input type="text" inputmode="decimal" id="imp-opFuoriIntera"></div>
+    <div class="imp-riga"><span>Presenza servizi esterni</span><input type="text" inputmode="decimal" id="imp-serviziEsterni"></div>
+    <div class="imp-riga"><span>Premio disattivazione ordigni (per intervento)</span><input type="text" inputmode="decimal" id="imp-ordigni"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-titolo">📅 Indennità mensili fisse (€/mese)</div>
+    <p class="imp-nota">Se attive, vengono conteggiate una sola volta per ogni mese nel riepilogo.</p>
+    <div class="imp-riga-toggle">
+      <label class="flag-chip"><input type="checkbox" id="imp-radiazioniAttiva"><span>Attiva</span></label>
+      <span class="imp-toggle-nome">Radiazioni ionizzanti artificieri</span>
+      <input type="text" inputmode="decimal" id="imp-radiazioni">
+    </div>
+    <div class="imp-riga-toggle">
+      <label class="flag-chip"><input type="checkbox" id="imp-artificieriAttiva"><span>Attiva</span></label>
+      <span class="imp-toggle-nome">Indennità mensile artificieri IEDD/CMD/EOD</span>
+      <input type="text" inputmode="decimal" id="imp-artificieri">
+    </div>
+  </div>
+
+  <button class="btn btn-primary" onclick="salvaImpostazioni()">💾 Salva importi</button>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-titolo">🗄 Backup dati</div>
+    <p class="imp-nota">
+      I dati vivono solo nel browser di questo telefono. Se cancelli i dati
+      del browser o cambi dispositivo, li perdi. Esporta un backup regolarmente
+      e conservalo in un posto sicuro (es. una tua email o una cartella privata).
+    </p>
+    <button class="btn btn-backup" onclick="esportaBackup()">⬇️ Esporta backup JSON</button>
+    <button class="btn btn-backup" onclick="document.getElementById('file-import').click()">⬆️ Importa backup JSON</button>
+    <input type="file" id="file-import" accept=".json,application/json" style="display:none" onchange="importaBackup(event)">
+    <button class="btn btn-pericolo" onclick="cancellaTuttiIDati()">🗑 Cancella tutti i dati</button>
+  </div>
+
+</div>
+
+<!-- Toast di notifica -->
+<div id="toast"></div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════ -->
+<script>
+
+// ─────────────────────────────────────────────────────────
+//  CONFIGURAZIONE: colori per fascia turno
+// ─────────────────────────────────────────────────────────
+const COLORI = {
+  'Mattina':    '#0EA5E9',
+  'Pomeriggio': '#F97316',
+  'Notte':      '#1E3A5F',
+  'Giornata':   '#10B981',
+  'Altro':      '#94A3B8'
+};
+
+// ─────────────────────────────────────────────────────────
+//  CONFIGURAZIONE: flag / caratteristiche del servizio
+//  id      = id del checkbox nel form
+//  chiave  = nome del campo salvato nel turno
+//  label   = testo mostrato in lista e riepilogo
+// ─────────────────────────────────────────────────────────
+const FLAGS = [
+  { id: 'flag-festivo',        chiave: 'festivo',        label: 'Festivo',                    emoji: '🎉' },
+  { id: 'flag-nottidx',        chiave: 'nottIdx',        label: 'Indennità servizio notturno', emoji: '🌙' },
+  { id: 'flag-opsede',         chiave: 'opSede',         label: 'OP sede',                    emoji: '🛡' },
+  { id: 'flag-opfuori1',       chiave: 'opFuori1',       label: 'OP fuori 1 turno',           emoji: '🚌' },
+  { id: 'flag-opfuoriintera',  chiave: 'opFuoriIntera',  label: 'OP fuori intera/gr. eventi', emoji: '🚍' },
+  { id: 'flag-missione',       chiave: 'missione',       label: 'Missione',                   emoji: '✈️' },
+  { id: 'flag-reperibilita',   chiave: 'reperibilita',   label: 'Reperibilità',               emoji: '📞' },
+  { id: 'flag-serviziesterni', chiave: 'serviziEsterni', label: 'Presenza servizi esterni',   emoji: '🚶' },
+  { id: 'flag-ordigni',        chiave: 'ordigni',        label: 'Disattivazione ordigni',     emoji: '💣' },
+  { id: 'flag-formazione',     chiave: 'formazione',     label: 'Formazione/aggiornamento',   emoji: '📚' }
+];
+
+// ─────────────────────────────────────────────────────────
+//  IMPORTI INDENNITÀ (configurabili dall'utente)
+//  ⚠️ Valori personali ricavati dalla busta paga.
+//     NON sono valori normativi ufficiali.
+// ─────────────────────────────────────────────────────────
+const CHIAVE_IMPORTI = 'turni_ps_importi_v1';
+
+const IMPORTI_DEFAULT = {
+  // Importi azzerati: i valori reali vivono solo nel localStorage del tuo
+  // telefono e nei tuoi backup, mai nel codice pubblicato online.
+  // Inseriscili (o reimportali da backup) dalla tab ⚙️ Importi.
+  straDiurno:      0,   // €/ora
+  straNottFest:    0,   // €/ora
+  straSpeciale:    0,   // €/ora
+  notturna:        0,   // € per turno
+  festiva:         0,   // € per turno
+  opSede:          0,   // € per servizio
+  opFuori1:        0,   // € per servizio
+  opFuoriIntera:   0,   // € per servizio
+  serviziEsterni:  0,   // € per servizio
+  ordigni:         0,   // € per intervento
+  radiazioni:      0,   // € mensili
+  artificieri:     0,   // € mensili
+  radiazioniAttiva:  false,
+  artificieriAttiva: false
+};
+
+function caricaImporti() {
+  try {
+    const raw = localStorage.getItem(CHIAVE_IMPORTI);
+    // Unisce i default con quanto salvato: se in futuro aggiungiamo
+    // nuove voci, i vecchi salvataggi continuano a funzionare
+    return raw ? Object.assign({}, IMPORTI_DEFAULT, JSON.parse(raw)) : Object.assign({}, IMPORTI_DEFAULT);
+  } catch (e) {
+    return Object.assign({}, IMPORTI_DEFAULT);
+  }
+}
+
+function salvaImportiStorage(obj) {
+  localStorage.setItem(CHIAVE_IMPORTI, JSON.stringify(obj));
+}
+
+// Converte un testo come "12,41" o "12.41" in numero. Vuoto → 0.
+function leggiNumero(testo) {
+  if (!testo) return 0;
+  const n = parseFloat(String(testo).replace(',', '.'));
+  return isNaN(n) || n < 0 ? 0 : n;
+}
+
+// Formatta un numero come valuta italiana: 12.41 → "12,41 €"
+function euro(n) {
+  return n.toFixed(2).replace('.', ',') + ' €';
+}
+
+const CHIAVE = 'turni_ps_v1';  // chiave per localStorage
+
+// ─────────────────────────────────────────────────────────
+//  DATI: carica e salva su localStorage
+// ─────────────────────────────────────────────────────────
+
+function caricaTurni() {
+  try {
+    const raw = localStorage.getItem(CHIAVE);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function salvaTurniStorage(lista) {
+  localStorage.setItem(CHIAVE, JSON.stringify(lista));
+}
+
+// ─────────────────────────────────────────────────────────
+//  CALCOLO DURATA (gestisce i turni a cavallo della mezzanotte)
+//
+//  Esempio:
+//    21:00 → 06:00  →  fine < inizio  →  aggiungiamo 24h alla fine
+//    06:48 → 14:00  →  fine > inizio  →  calcolo normale
+// ─────────────────────────────────────────────────────────
+
+function calcolaMinuti(inizio, fine) {
+  if (!inizio || !fine) return 0;
+
+  const [hI, mI] = inizio.split(':').map(Number);
+  const [hF, mF] = fine.split(':').map(Number);
+
+  let minI = hI * 60 + mI;
+  let minF = hF * 60 + mF;
+
+  // Se l'ora di fine è ≤ all'inizio, il turno supera la mezzanotte
+  if (minF <= minI) minF += 1440;  // 1440 = 24 * 60 minuti
+
+  return minF - minI;
+}
+
+function formattaMinuti(min) {
+  if (!min || min <= 0) return '—';
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}min`;
+}
+
+// Aggiorna il testo della durata mentre si compila il form
+function aggiornaPreview() {
+  const inizio = document.getElementById('campo-inizio').value;
+  const fine   = document.getElementById('campo-fine').value;
+  const el     = document.getElementById('durata-preview');
+
+  if (!inizio || !fine) { el.textContent = ''; return; }
+
+  const min      = calcolaMinuti(inizio, fine);
+  const notturno = fine <= inizio ? '  🌙 attraversa la mezzanotte' : '';
+  el.textContent = `Durata: ${formattaMinuti(min)}${notturno}`;
+}
+
+// ─────────────────────────────────────────────────────────
+//  NAVIGAZIONE TAB
+// ─────────────────────────────────────────────────────────
+
+function apriTab(nome) {
+  // Nascondi tutto
+  document.querySelectorAll('.sezione').forEach(s => s.classList.remove('attiva'));
+  document.querySelectorAll('.tabbar button').forEach(b => b.classList.remove('active'));
+
+  // Mostra la sezione scelta
+  document.getElementById('sezione-' + nome).classList.add('attiva');
+  document.getElementById('tab-' + nome).classList.add('active');
+
+  // Aggiorna il contenuto quando si entra nella sezione
+  if (nome === 'lista')         renderLista();
+  if (nome === 'riepilogo')     renderRiepilogo();
+  if (nome === 'impostazioni')  renderImpostazioni();
+}
+
+// ─────────────────────────────────────────────────────────
+//  TOAST NOTIFICA
+// ─────────────────────────────────────────────────────────
+
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('visibile');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('visibile'), 2400);
+}
+
+// ─────────────────────────────────────────────────────────
+//  FORM: SALVA TURNO (nuovo o modifica)
+// ─────────────────────────────────────────────────────────
+
+function salvaTurno() {
+  const id    = document.getElementById('turno-id').value.trim();
+  const data  = document.getElementById('campo-data').value;
+  const inizio = document.getElementById('campo-inizio').value;
+  const fine   = document.getElementById('campo-fine').value;
+  const tipo   = document.getElementById('campo-tipo').value;
+  const sede   = document.getElementById('campo-sede').value.trim();
+  const note   = document.getElementById('campo-note').value.trim();
+
+  // ── Validazione ──
+  if (!data)   { alert('Inserisci la data.'); return; }
+  if (!inizio) { alert("Inserisci l'ora di inizio."); return; }
+  if (!fine)   { alert("Inserisci l'ora di fine."); return; }
+  if (!tipo)   { alert('Seleziona il tipo di turno.'); return; }
+
+  const durata = calcolaMinuti(inizio, fine);
+
+  // Raccoglie lo stato di tutti i checkbox in un oggetto:
+  // es. { festivo: true, opSede: false, ... }
+  const flags = {};
+  FLAGS.forEach(f => {
+    flags[f.chiave] = document.getElementById(f.id).checked;
+  });
+
+  // Raccoglie le ore di straordinario (accetta virgola o punto)
+  const stra = {
+    diurno:   leggiNumero(document.getElementById('stra-diurno').value),
+    nottFest: leggiNumero(document.getElementById('stra-nottfest').value),
+    speciale: leggiNumero(document.getElementById('stra-speciale').value)
+  };
+
+  const turni = caricaTurni();
+
+  if (id) {
+    // ── Modalità MODIFICA ──
+    const idx = turni.findIndex(t => t.id === id);
+    if (idx !== -1) {
+      turni[idx] = { id, data, inizio, fine, tipo, sede, note, durata, flags, stra };
+    }
+    salvaTurniStorage(turni);
+    resetForm();
+    toast('✅ Turno aggiornato');
+  } else {
+    // ── Modalità NUOVO ──
+    turni.push({
+      id: Date.now().toString(),  // ID unico basato sul timestamp
+      data, inizio, fine, tipo, sede, note, durata, flags, stra
+    });
+    salvaTurniStorage(turni);
+    resetForm();
+    toast('✅ Turno salvato');
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  FORM: RESET (torna allo stato "nuovo turno")
+// ─────────────────────────────────────────────────────────
+
+function resetForm() {
+  document.getElementById('turno-id').value     = '';
+  document.getElementById('campo-data').value   = oggiISO();
+  document.getElementById('campo-inizio').value = '';
+  document.getElementById('campo-fine').value   = '';
+  document.getElementById('campo-tipo').value   = '';
+  document.getElementById('campo-sede').value   = '';
+  document.getElementById('campo-note').value   = '';
+
+  // Azzera tutti i checkbox delle caratteristiche
+  FLAGS.forEach(f => { document.getElementById(f.id).checked = false; });
+
+  // Azzera i campi straordinario
+  document.getElementById('stra-diurno').value   = '';
+  document.getElementById('stra-nottfest').value = '';
+  document.getElementById('stra-speciale').value = '';
+
+  document.getElementById('durata-preview').textContent = '';
+  document.getElementById('form-titolo').textContent    = 'Nuovo turno';
+  document.getElementById('banner-modifica').style.display = 'none';
+  document.getElementById('btn-annulla').style.display     = 'none';
+}
+
+function annullaModifica() {
+  resetForm();
+  toast('Modifica annullata');
+}
+
+// ─────────────────────────────────────────────────────────
+//  FORM: PRE-POPOLA per la modifica
+// ─────────────────────────────────────────────────────────
+
+function modificaTurno(id) {
+  const t = caricaTurni().find(x => x.id === id);
+  if (!t) return;
+
+  document.getElementById('turno-id').value     = t.id;
+  document.getElementById('campo-data').value   = t.data;
+  document.getElementById('campo-inizio').value = t.inizio;
+  document.getElementById('campo-fine').value   = t.fine;
+  document.getElementById('campo-tipo').value   = t.tipo;
+  document.getElementById('campo-sede').value   = t.sede  || '';
+  document.getElementById('campo-note').value   = t.note  || '';
+
+  // Ripopola i checkbox: se il turno è vecchio e non ha flags, restano spenti
+  const flags = t.flags || {};
+  FLAGS.forEach(f => {
+    document.getElementById(f.id).checked = !!flags[f.chiave];
+  });
+
+  // Ripopola le ore di straordinario (con virgola, formato italiano)
+  const stra = t.stra || {};
+  document.getElementById('stra-diurno').value   = stra.diurno   ? String(stra.diurno).replace('.', ',')   : '';
+  document.getElementById('stra-nottfest').value = stra.nottFest ? String(stra.nottFest).replace('.', ',') : '';
+  document.getElementById('stra-speciale').value = stra.speciale ? String(stra.speciale).replace('.', ',') : '';
+
+  document.getElementById('form-titolo').textContent    = 'Modifica turno';
+  document.getElementById('banner-modifica').style.display = 'block';
+  document.getElementById('btn-annulla').style.display     = 'block';
+
+  aggiornaPreview();
+  apriTab('aggiungi');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ─────────────────────────────────────────────────────────
+//  ELIMINA TURNO
+// ─────────────────────────────────────────────────────────
+
+function eliminaTurno(id) {
+  const t = caricaTurni().find(x => x.id === id);
+  if (!t) return;
+
+  if (!confirm(`Eliminare il turno del ${formattaData(t.data)} (${t.tipo})?`)) return;
+
+  salvaTurniStorage(caricaTurni().filter(x => x.id !== id));
+  renderLista();
+  toast('🗑 Turno eliminato');
+}
+
+// ─────────────────────────────────────────────────────────
+//  HELPER: selettore mese (usato sia in Lista che in Riepilogo)
+// ─────────────────────────────────────────────────────────
+
+function popolaSelettoreMese(idSelect) {
+  const turni   = caricaTurni();
+  const mesiSet = new Set();
+
+  // Il mese corrente è sempre presente
+  const ora = new Date();
+  mesiSet.add(meseISO(ora));
+
+  // Aggiungi i mesi in cui ci sono turni
+  turni.forEach(t => { if (t.data) mesiSet.add(t.data.slice(0, 7)); });
+
+  // Ordina dal più recente al meno recente
+  const mesi = Array.from(mesiSet).sort().reverse();
+
+  const sel = document.getElementById(idSelect);
+  const corrente = sel.value || mesi[0];
+  sel.innerHTML = '';
+
+  mesi.forEach(m => {
+    const [a, mm] = m.split('-');
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = `${nomeMese(parseInt(mm))} ${a}`;
+    if (m === corrente) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+//  RENDER: LISTA TURNI
+// ─────────────────────────────────────────────────────────
+
+function renderLista() {
+  popolaSelettoreMese('filtro-lista');
+
+  const mese  = document.getElementById('filtro-lista').value;
+  const turni = caricaTurni()
+    .filter(t => t.data && t.data.startsWith(mese))
+    .sort((a, b) => b.data.localeCompare(a.data));  // più recente prima
+
+  const el = document.getElementById('contenuto-lista');
+
+  if (turni.length === 0) {
+    el.innerHTML = `
+      <div class="vuoto">
+        <div class="vuoto-icona">📭</div>
+        Nessun turno in questo mese.<br>
+        Usa la tab <strong>Turno</strong> per aggiungerne uno.
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = turni.map(t => {
+    const colore   = COLORI[t.tipo] || '#94A3B8';
+    const sedeHtml = t.sede ? `<div class="turno-sede">📍 ${esc(t.sede)}</div>` : '';
+    const noteHtml = t.note ? `<div class="turno-note">📝 ${esc(t.note)}</div>` : '';
+    const notturno = t.fine && t.inizio && t.fine <= t.inizio ? ' 🌙' : '';
+
+    // Genera i mini-badge dei flag attivi (es. Festivo, OP sede...)
+    const flags = t.flags || {};
+    const flagHtml = FLAGS
+      .filter(f => flags[f.chiave])
+      .map(f => `<span class="mini-flag">${f.emoji} ${esc(f.label)}</span>`)
+      .join('');
+    const flagsRiga = flagHtml ? `<div class="turno-flags">${flagHtml}</div>` : '';
+
+    return `
+      <div class="turno-item" style="border-left-color:${colore}">
+        <div class="turno-top">
+          <div class="turno-data-giorno">${formattaData(t.data)}</div>
+          <div class="badge" style="background:${colore}">${esc(t.tipo)}</div>
+        </div>
+        <div class="turno-ore">
+          🕐 ${t.inizio} → ${t.fine}${notturno}
+          &nbsp;&nbsp;<strong>${formattaMinuti(t.durata)}</strong>
+        </div>
+        ${flagsRiga}
+        ${sedeHtml}
+        ${noteHtml}
+        <div class="turno-azioni">
+          <button class="btn-azione btn-modifica" onclick="modificaTurno('${t.id}')">✏️ Modifica</button>
+          <button class="btn-azione btn-elimina"  onclick="eliminaTurno('${t.id}')">🗑 Elimina</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────────────────
+//  RENDER: RIEPILOGO MENSILE
+// ─────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────
+//  CALCOLO CENTRALE DEL RIEPILOGO MENSILE
+//  ★ UNICA fonte di verità per tutti i conteggi e le indennità.
+//  Usata sia dalla schermata Mese sia dall'export CSV:
+//  i due totali provengono dallo stesso calcolo e coincidono sempre.
+//
+//  Restituisce un oggetto con:
+//    turni      → turni del mese, in ordine cronologico
+//    totMin     → minuti totali lavorati
+//    perFascia  → { 'Mattina': {n, min}, ... }
+//    contaFlag  → { festivo: 3, opSede: 2, ... }
+//    oreStra    → { diurno, nottFest, speciale }
+//    voci       → dettaglio indennità (solo voci > 0), ognuna con:
+//                 { nome, qta, unitario, unita, inOre, fissa, importo }
+//    totale     → totale stimato in euro
+// ─────────────────────────────────────────────────────────
+
+function calcolaRiepilogoMese(mese) {
+  const turni = caricaTurni()
+    .filter(t => t.data && t.data.startsWith(mese))
+    .sort((a, b) => a.data.localeCompare(b.data));  // ordine cronologico
+
+  // ── Minuti totali ──
+  const totMin = turni.reduce((s, t) => s + (t.durata || 0), 0);
+
+  // ── Conteggio fasce orarie ──
+  const perFascia = {};
+  turni.forEach(t => {
+    if (!perFascia[t.tipo]) perFascia[t.tipo] = { n: 0, min: 0 };
+    perFascia[t.tipo].n++;
+    perFascia[t.tipo].min += t.durata || 0;
+  });
+
+  // ── Conteggio caratteristiche ──
+  const contaFlag = {};
+  FLAGS.forEach(f => {
+    contaFlag[f.chiave] = turni.filter(t => t.flags && t.flags[f.chiave]).length;
+  });
+
+  // ── Totali ore straordinario ──
+  const oreStra = { diurno: 0, nottFest: 0, speciale: 0 };
+  turni.forEach(t => {
+    if (!t.stra) return;
+    oreStra.diurno   += t.stra.diurno   || 0;
+    oreStra.nottFest += t.stra.nottFest || 0;
+    oreStra.speciale += t.stra.speciale || 0;
+  });
+
+  // ── Indennità stimate ──
+  // ⚠️ Importi personali configurabili, NON ufficiali.
+  // L'indennità notturna è applicata SOLO ai turni con il checkbox
+  // "Indennità servizio notturno" attivo. La fascia "Notte" è solo
+  // una categoria organizzativa e da sola non genera l'indennità.
+  const imp  = caricaImporti();
+  const voci = [];
+
+  // Aggiunge una voce solo se la quantità è maggiore di zero
+  function aggiungi(nome, qta, unitario, unita, inOre, fissa) {
+    if (qta <= 0) return;
+    voci.push({
+      nome, qta, unitario, unita,
+      inOre: !!inOre,
+      fissa: !!fissa,
+      importo: qta * unitario
+    });
+  }
+
+  aggiungi('Straordinario diurno',               oreStra.diurno,           imp.straDiurno,     'ore',        true);
+  aggiungi('Straordinario notturno/festivo',     oreStra.nottFest,         imp.straNottFest,   'ore',        true);
+  aggiungi('Straordinario nott-fest. speciale',  oreStra.speciale,         imp.straSpeciale,   'ore',        true);
+  aggiungi('Indennità servizio notturno',        contaFlag.nottIdx,        imp.notturna,       'turni');
+  aggiungi('Indennità festiva',                  contaFlag.festivo,        imp.festiva,        'turni');
+  aggiungi('OP sede',                            contaFlag.opSede,         imp.opSede,         'servizi');
+  aggiungi('OP fuori sede 1 turno',              contaFlag.opFuori1,       imp.opFuori1,       'servizi');
+  aggiungi('OP fuori sede intera/grandi eventi', contaFlag.opFuoriIntera,  imp.opFuoriIntera,  'servizi');
+  aggiungi('Presenza servizi esterni',           contaFlag.serviziEsterni, imp.serviziEsterni, 'servizi');
+  aggiungi('Premio disattivazione ordigni',      contaFlag.ordigni,        imp.ordigni,        'interventi');
+
+  // Indennità mensili fisse: una sola volta per mese, se attive
+  if (imp.radiazioniAttiva)  aggiungi('Radiazioni ionizzanti artificieri',  1, imp.radiazioni,  'fissa mensile', false, true);
+  if (imp.artificieriAttiva) aggiungi('Indennità artificieri IEDD/CMD/EOD', 1, imp.artificieri, 'fissa mensile', false, true);
+
+  const totale = voci.reduce((s, v) => s + v.importo, 0);
+
+  return { turni, totMin, perFascia, contaFlag, oreStra, voci, totale };
+}
+
+function renderRiepilogo() {
+  popolaSelettoreMese('filtro-riepilogo');
+
+  const mese = document.getElementById('filtro-riepilogo').value;
+  const el   = document.getElementById('contenuto-riepilogo');
+
+  // ★ Tutto il calcolo avviene nella funzione centrale
+  const r = calcolaRiepilogoMese(mese);
+
+  if (r.turni.length === 0) {
+    el.innerHTML = `
+      <div class="card">
+        <div class="vuoto">
+          <div class="vuoto-icona">📊</div>
+          Nessun turno in questo mese.
+        </div>
+      </div>`;
+    return;
+  }
+
+  const totOre   = (r.totMin / 60).toFixed(1);
+  const numTurni = r.turni.length;
+
+  // ── Righe fasce orarie ──
+  const righeFasce = Object.entries(r.perFascia)
+    .sort(([,a], [,b]) => b.n - a.n)
+    .map(([fascia, d]) => {
+      const colore = COLORI[fascia] || '#94A3B8';
+      const ore    = (d.min / 60).toFixed(1);
+      return `
+        <div class="riepilogo-riga">
+          <div class="riga-sinistra">
+            <div class="pallino" style="background:${colore}"></div>
+            <span>${esc(fascia)}</span>
+          </div>
+          <div class="riga-destra">
+            ${d.n} turni
+            <small>${ore}h totali</small>
+          </div>
+        </div>`;
+    }).join('');
+
+  // ── Righe caratteristiche ──
+  const righeFlag = FLAGS.map(f => {
+    const conteggio = r.contaFlag[f.chiave];
+    if (conteggio === 0) return '';  // non mostriamo le righe a zero
+    return `
+      <div class="riepilogo-riga">
+        <div class="riga-sinistra">
+          <span style="width:11px;text-align:center">${f.emoji}</span>
+          <span>${esc(f.label)}</span>
+        </div>
+        <div class="riga-destra">${conteggio} turni</div>
+      </div>`;
+  }).join('');
+
+  const sezioneFlag = righeFlag ? `
+    <div class="riepilogo-sottotitolo">Caratteristiche del servizio</div>
+    ${righeFlag}` : '';
+
+  // ── Righe ore straordinario ──
+  const fmtOre = n => n.toFixed(1).replace('.', ',') + 'h';
+
+  const righeStra = `
+    <div class="riepilogo-riga">
+      <div class="riga-sinistra"><span style="width:11px;text-align:center">⏱</span><span>Straordinario diurno</span></div>
+      <div class="riga-destra">${fmtOre(r.oreStra.diurno)}</div>
+    </div>
+    <div class="riepilogo-riga">
+      <div class="riga-sinistra"><span style="width:11px;text-align:center">⏱</span><span>Straordinario nott./festivo</span></div>
+      <div class="riga-destra">${fmtOre(r.oreStra.nottFest)}</div>
+    </div>
+    <div class="riepilogo-riga">
+      <div class="riga-sinistra"><span style="width:11px;text-align:center">⏱</span><span>Straordinario nott-fest. speciale</span></div>
+      <div class="riga-destra">${fmtOre(r.oreStra.speciale)}</div>
+    </div>`;
+
+  // ── Righe indennità (dal calcolo centrale) ──
+  const righeIndennita = r.voci.map(v => {
+    // Per le voci fisse mensili: solo "fissa mensile", senza moltiplicazione
+    const dettaglio = v.fissa
+      ? 'fissa mensile'
+      : (v.inOre ? fmtOre(v.qta) : v.qta + ' ' + v.unita) + ' × ' + euro(v.unitario);
+    return `
+      <div class="riepilogo-riga">
+        <div class="riga-sinistra"><span>${esc(v.nome)}</span></div>
+        <div class="riga-destra">
+          ${euro(v.importo)}
+          <small>${dettaglio}</small>
+        </div>
+      </div>`;
+  }).join('');
+
+  const sezioneIndennita = righeIndennita ? `
+    <div class="riepilogo-sottotitolo">Indennità stimate</div>
+    ${righeIndennita}
+    <div class="totale-indennita">
+      <span>TOTALE STIMATO</span>
+      <span>${euro(r.totale)}</span>
+    </div>
+    <div class="disclaimer-grande">⚠️ STIMA PERSONALE NON UFFICIALE</div>` : '';
+
+  const [anno, mm] = mese.split('-');
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-titolo">📊 ${nomeMese(parseInt(mm))} ${anno}</div>
+      <div class="riepilogo-grande">
+        <div class="numero-grande">${totOre}<span style="font-size:1.4rem">h</span></div>
+        <div class="numero-grande-label">ore lavorate · ${numTurni} turni in totale</div>
+      </div>
+      <div class="riepilogo-sottotitolo">Fasce orarie</div>
+      ${righeFasce}
+      ${sezioneFlag}
+      <div class="riepilogo-sottotitolo">Ore straordinario</div>
+      ${righeStra}
+      ${sezioneIndennita}
+    </div>`;
+}
+
+// ─────────────────────────────────────────────────────────
+//  UTILITÀ
+// ─────────────────────────────────────────────────────────
+
+// Restituisce la data di oggi nel formato YYYY-MM-DD
+function oggiISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Restituisce "Lun 15/01/2025" da "2025-01-15"
+function formattaData(iso) {
+  if (!iso) return '—';
+  const [a, m, g] = iso.split('-');
+  const gg = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+  const d  = new Date(iso + 'T12:00:00');
+  return `${gg[d.getDay()]} ${g}/${m}/${a}`;
+}
+
+// Restituisce "YYYY-MM" per il mese corrente
+function meseISO(date) {
+  const a = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  return `${a}-${m}`;
+}
+
+// Nome mese da numero (1–12)
+function nomeMese(n) {
+  return ['', 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+              'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'][n];
+}
+
+// Escape HTML per prevenire errori con caratteri speciali nelle note
+function esc(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─────────────────────────────────────────────────────────
+//  EXPORT CSV del riepilogo mensile
+//  Separatore: punto e virgola (formato Excel italiano)
+//  Decimali: con la virgola (1,5 e non 1.5)
+// ─────────────────────────────────────────────────────────
+
+// Protegge un valore per il CSV: se contiene ; " o a-capo
+// lo racchiude tra virgolette (regola standard CSV)
+function csvCampo(valore) {
+  const s = String(valore == null ? '' : valore);
+  if (s.includes(';') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+// Numero con virgola decimale per Excel italiano: 7.2 → "7,2"
+function csvNumero(n, decimali) {
+  return n.toFixed(decimali).replace('.', ',');
+}
+
+function esportaCSV() {
+  // Esporta il mese attualmente selezionato nella tab Mese
+  const mese = document.getElementById('filtro-riepilogo').value;
+
+  // ★ Stesso calcolo della schermata Mese: unica fonte di verità.
+  //   Il totale del CSV coincide sempre con quello a schermo.
+  const r = calcolaRiepilogoMese(mese);
+
+  if (r.turni.length === 0) {
+    alert('Nessun turno in questo mese: niente da esportare.');
+    return;
+  }
+
+  const siNo = v => v ? 'sì' : 'no';
+  const righe = [];
+
+  // ══ SEZIONE 1: elenco turni ══════════════════════════
+  righe.push('ELENCO TURNI ' + mese);
+  righe.push([
+    'data', 'ora inizio', 'ora fine', 'durata ore', 'fascia',
+    'festivo', 'indennità servizio notturno', 'OP sede',
+    'OP fuori sede 1 turno', 'OP fuori sede intera/grandi eventi',
+    'missione', 'reperibilità', 'presenza servizi esterni',
+    'disattivazione ordigni', 'formazione',
+    'straordinario diurno ore', 'straordinario nott/fest ore',
+    'straordinario speciale ore', 'sede', 'note'
+  ].join(';'));
+
+  r.turni.forEach(t => {
+    const f = t.flags || {};
+    const s = t.stra  || {};
+    righe.push([
+      t.data,
+      t.inizio,
+      t.fine,
+      csvNumero((t.durata || 0) / 60, 2),
+      csvCampo(t.tipo),
+      siNo(f.festivo),
+      siNo(f.nottIdx),
+      siNo(f.opSede),
+      siNo(f.opFuori1),
+      siNo(f.opFuoriIntera),
+      siNo(f.missione),
+      siNo(f.reperibilita),
+      siNo(f.serviziEsterni),
+      siNo(f.ordigni),
+      siNo(f.formazione),
+      csvNumero(s.diurno   || 0, 2),
+      csvNumero(s.nottFest || 0, 2),
+      csvNumero(s.speciale || 0, 2),
+      csvCampo(t.sede || ''),
+      csvCampo(t.note || '')
+    ].join(';'));
+  });
+
+  // ══ SEZIONE 2: riepilogo indennità stimate ═══════════
+  // Le voci arrivano già pronte dal calcolo centrale:
+  // qui si fa SOLO la formattazione delle righe CSV.
+  righe.push('');  // riga vuota di separazione
+  righe.push('RIEPILOGO INDENNITÀ STIMATE ' + mese);
+  righe.push(['voce', 'quantità', 'importo unitario', 'totale'].join(';'));
+
+  r.voci.forEach(v => {
+    righe.push([
+      csvCampo(v.nome),
+      csvNumero(v.qta, v.inOre ? 2 : 0),
+      csvNumero(v.unitario, 2),
+      csvNumero(v.importo, 2)
+    ].join(';'));
+  });
+
+  righe.push(['TOTALE STIMATO', '', '', csvNumero(r.totale, 2)].join(';'));
+  righe.push('');
+  righe.push('STIMA PERSONALE NON UFFICIALE');
+
+  // ══ Download del file ════════════════════════════════
+  // \uFEFF (BOM) serve a Excel per leggere correttamente
+  // le lettere accentate (Reperibilità, indennità...)
+  const blob = new Blob(['\uFEFF' + righe.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `turni_ps_riepilogo_${mese}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  toast('📄 CSV esportato');
+}
+
+// ─────────────────────────────────────────────────────────
+//  BACKUP DATI
+//  Esporta/importa tutto il contenuto dell'app come file JSON.
+//  Il backup contiene: turni, importi e interruttori mensili.
+// ─────────────────────────────────────────────────────────
+
+const BACKUP_VERSIONE = 1;  // se in futuro cambia la struttura dati,
+                            // questo numero ci permette di riconoscerla
+
+function esportaBackup() {
+  const backup = {
+    app:        'turni_ps',
+    versione:   BACKUP_VERSIONE,
+    dataBackup: new Date().toISOString(),  // data e ora del backup
+    turni:      caricaTurni(),
+    importi:    caricaImporti()            // include anche radiazioniAttiva
+                                           // e artificieriAttiva
+  };
+
+  // Crea il file e fa partire il download
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+
+  // Nome file con data: turni_ps_backup_2025-06-12.json
+  const oggi = new Date().toISOString().slice(0, 10);
+  a.href     = url;
+  a.download = `turni_ps_backup_${oggi}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  toast('⬇️ Backup esportato');
+}
+
+function importaBackup(event) {
+  const file = event.target.files[0];
+  // Azzera subito l'input: così si può rifare l'import dello stesso file
+  event.target.value = '';
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onerror = function () {
+    alert('Errore: impossibile leggere il file. Riprova.');
+  };
+
+  reader.onload = function (e) {
+    let backup;
+
+    // ── 1. Il file è un JSON valido? ──
+    try {
+      backup = JSON.parse(e.target.result);
+    } catch (err) {
+      alert('Errore: il file selezionato non è un JSON valido.\n' +
+            'Assicurati di scegliere un file esportato da questa app.');
+      return;
+    }
+
+    // ── 2. Il JSON ha la struttura giusta? ──
+    if (!backup || backup.app !== 'turni_ps' || !Array.isArray(backup.turni) ||
+        typeof backup.importi !== 'object' || backup.importi === null) {
+      alert('Errore: il file non sembra un backup di questa app.\n' +
+            'Mancano i dati attesi (turni e importi).');
+      return;
+    }
+
+    // ── 3. Conferma prima di sovrascrivere ──
+    const dataB  = backup.dataBackup ? new Date(backup.dataBackup).toLocaleString('it-IT') : 'sconosciuta';
+    const nTurni = backup.turni.length;
+    const attuali = caricaTurni().length;
+
+    const ok = confirm(
+      `Backup del: ${dataB}\n` +
+      `Turni nel backup: ${nTurni}\n\n` +
+      `ATTENZIONE: i dati attuali (${attuali} turni e tutti gli importi) ` +
+      `verranno SOSTITUITI da quelli del backup.\n\nProcedere?`
+    );
+    if (!ok) return;
+
+    // ── 4. Sovrascrive i dati ──
+    salvaTurniStorage(backup.turni);
+    salvaImportiStorage(Object.assign({}, IMPORTI_DEFAULT, backup.importi));
+
+    // Aggiorna tutte le schermate con i nuovi dati
+    aggiornaEtichetteStra();
+    renderImpostazioni();
+    toast('⬆️ Backup importato');
+  };
+
+  reader.readAsText(file);
+}
+
+function cancellaTuttiIDati() {
+  const nTurni = caricaTurni().length;
+
+  // ── Prima conferma ──
+  const prima = confirm(
+    `Stai per cancellare TUTTI i dati dell'app:\n` +
+    `· ${nTurni} turni salvati\n` +
+    `· tutti gli importi configurati\n\n` +
+    `L'operazione NON è reversibile.\nVuoi continuare?`
+  );
+  if (!prima) return;
+
+  // ── Seconda conferma ──
+  const seconda = confirm(
+    'ULTIMA CONFERMA.\n\n' +
+    'Hai esportato un backup? Se no, premi Annulla e fallo prima.\n\n' +
+    'Verranno cancellati tutti i turni e tutti gli importi saranno azzerati.\n\n' +
+    'Premi OK per cancellare definitivamente tutto.'
+  );
+  if (!seconda) return;
+
+  localStorage.removeItem(CHIAVE);
+
+  // Gli importi non vengono solo rimossi: vengono salvati tutti a ZERO.
+  // Se li rimuovessimo e basta, l'app ricaricherebbe i valori predefiniti
+  // scritti nel codice, e sembrerebbe che la cancellazione non abbia
+  // funzionato. Con lo zero esplicito il risultato è visibile e netto.
+  const importiAzzerati = {};
+  Object.keys(IMPORTI_DEFAULT).forEach(k => {
+    importiAzzerati[k] = (typeof IMPORTI_DEFAULT[k] === 'boolean') ? false : 0;
+  });
+  salvaImportiStorage(importiAzzerati);
+
+  // Riporta l'app allo stato iniziale
+  resetForm();
+  aggiornaEtichetteStra();
+  renderImpostazioni();
+  toast('🗑 Tutti i dati cancellati');
+}
+
+// ─────────────────────────────────────────────────────────
+//  ETICHETTE STRAORDINARIO con importo corrente
+//  Lette dalle impostazioni: se cambi un importo in ⚙️,
+//  l'etichetta nel form si aggiorna da sola.
+// ─────────────────────────────────────────────────────────
+
+function aggiornaEtichetteStra() {
+  const imp = caricaImporti();
+  document.getElementById('label-stra-diurno').innerHTML =
+    `Diurno <small>${euro(imp.straDiurno)}/h</small>`;
+  document.getElementById('label-stra-nottfest').innerHTML =
+    `Notturno o festivo <small>${euro(imp.straNottFest)}/h</small>`;
+  document.getElementById('label-stra-speciale').innerHTML =
+    `Notturno-festivo speciale <small>${euro(imp.straSpeciale)}/h</small>`;
+}
+
+// ─────────────────────────────────────────────────────────
+//  IMPOSTAZIONI INDENNITÀ: carica e salva dalla schermata
+// ─────────────────────────────────────────────────────────
+
+// Elenco dei campi numerici: [id input, chiave nell'oggetto importi]
+const CAMPI_IMPORTI = [
+  ['imp-straDiurno',     'straDiurno'],
+  ['imp-straNottFest',   'straNottFest'],
+  ['imp-straSpeciale',   'straSpeciale'],
+  ['imp-notturna',       'notturna'],
+  ['imp-festiva',        'festiva'],
+  ['imp-opSede',         'opSede'],
+  ['imp-opFuori1',       'opFuori1'],
+  ['imp-opFuoriIntera',  'opFuoriIntera'],
+  ['imp-serviziEsterni', 'serviziEsterni'],
+  ['imp-ordigni',        'ordigni'],
+  ['imp-radiazioni',     'radiazioni'],
+  ['imp-artificieri',    'artificieri']
+];
+
+// Riempie i campi della schermata con i valori salvati
+function renderImpostazioni() {
+  const imp = caricaImporti();
+  CAMPI_IMPORTI.forEach(([idInput, chiave]) => {
+    document.getElementById(idInput).value = String(imp[chiave]).replace('.', ',');
+  });
+  document.getElementById('imp-radiazioniAttiva').checked  = !!imp.radiazioniAttiva;
+  document.getElementById('imp-artificieriAttiva').checked = !!imp.artificieriAttiva;
+}
+
+// Legge i campi della schermata e salva in localStorage
+function salvaImpostazioni() {
+  const imp = caricaImporti();
+  CAMPI_IMPORTI.forEach(([idInput, chiave]) => {
+    imp[chiave] = leggiNumero(document.getElementById(idInput).value);
+  });
+  imp.radiazioniAttiva  = document.getElementById('imp-radiazioniAttiva').checked;
+  imp.artificieriAttiva = document.getElementById('imp-artificieriAttiva').checked;
+  salvaImportiStorage(imp);
+  aggiornaEtichetteStra();  // aggiorna gli importi mostrati nel form turno
+  toast('✅ Importi salvati');
+}
+
+// ─────────────────────────────────────────────────────────
+//  MODELLI RAPIDI
+//  Compila ore inizio, ore fine e tipo turno con un tap.
+//  La data rimane quella già impostata nel campo.
+// ─────────────────────────────────────────────────────────
+
+function applicaModello(tipo, inizio, fine) {
+  document.getElementById('campo-inizio').value = inizio;
+  document.getElementById('campo-fine').value   = fine;
+  document.getElementById('campo-tipo').value   = tipo;
+  aggiornaPreview();
+  // Porta il focus sul campo sede, che di solito è il prossimo da compilare
+  document.getElementById('campo-sede').focus();
+}
+
+// ─────────────────────────────────────────────────────────
+//  INIZIALIZZAZIONE al caricamento della pagina
+// ─────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', function () {
+  // Imposta la data di oggi nel form
+  document.getElementById('campo-data').value = oggiISO();
+
+  // Scrive gli importi correnti nelle etichette dello straordinario
+  aggiornaEtichetteStra();
+
+  // Aggiorna la durata in tempo reale mentre si inseriscono le ore
+  document.getElementById('campo-inizio').addEventListener('change', aggiornaPreview);
+  document.getElementById('campo-fine').addEventListener('change', aggiornaPreview);
+
+  // ── Registra il service worker (abilita l'uso offline) ──
+  // Si registra in modo silenzioso: se fallisce, l'app funziona
+  // comunque normalmente, semplicemente senza modalità offline.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(function () {
+      // Nessun errore mostrato all'utente: l'offline è un extra,
+      // non un requisito per usare l'app.
+    });
+  }
+});
+
+</script>
+</body>
+</html>
