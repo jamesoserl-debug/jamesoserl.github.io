@@ -717,6 +717,132 @@
       margin-top: 4px;
     }
 
+    /* ── CONTROLLI ───────────────────────────────────── */
+    .ctrl-sommario {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .ctrl-sommario-box {
+      flex: 1;
+      background: #fff;
+      border-radius: 12px;
+      padding: 12px 8px;
+      text-align: center;
+    }
+    .ctrl-sommario-num {
+      font-size: 1.7rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .ctrl-sommario-lab {
+      font-size: 0.68rem;
+      color: #8695A6;
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .ctrl-num-errore { color: #DC2626; }
+    .ctrl-num-avviso { color: #D97706; }
+    .ctrl-num-info   { color: #2563EB; }
+
+    .ctrl-categoria-titolo {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #475569;
+      margin: 14px 0 8px;
+    }
+    .ctrl-item {
+      background: #fff;
+      border-radius: 11px;
+      padding: 12px 13px;
+      margin-bottom: 8px;
+      border-left: 4px solid #CBD5E1;
+    }
+    .ctrl-item.g-errore { border-left-color: #DC2626; }
+    .ctrl-item.g-avviso { border-left-color: #D97706; }
+    .ctrl-item.g-info   { border-left-color: #2563EB; }
+    .ctrl-item-top {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 4px;
+    }
+    .ctrl-gravita {
+      font-size: 0.62rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 2px 8px;
+      border-radius: 20px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .ctrl-gravita.g-errore { background: #DC2626; }
+    .ctrl-gravita.g-avviso { background: #D97706; }
+    .ctrl-gravita.g-info   { background: #2563EB; }
+    .ctrl-data {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #1C2B3A;
+    }
+    .ctrl-descr {
+      font-size: 0.84rem;
+      color: #334155;
+      line-height: 1.4;
+    }
+    .ctrl-azioni {
+      display: flex;
+      gap: 8px;
+      margin-top: 9px;
+    }
+    .ctrl-btn {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 7px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .ctrl-btn-apri   { background: #EFF6FF; color: #2563EB; }
+    .ctrl-btn-ignora { background: #F1F5F9; color: #64748B; }
+    .ctrl-btn:active { opacity: 0.7; }
+
+    .ctrl-ok {
+      text-align: center;
+      padding: 30px 20px;
+      color: #16A34A;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+    .ctrl-ok-icona { font-size: 2.5rem; margin-bottom: 8px; }
+
+    .ctrl-sezione-titolo {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #6B7E91;
+      margin: 14px 0 6px;
+    }
+    .ctrl-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 0;
+      border-bottom: 1px solid #F4F7FA;
+    }
+    .ctrl-toggle:last-child { border-bottom: none; }
+    .ctrl-toggle-nome {
+      flex: 1;
+      font-size: 0.82rem;
+      color: #334155;
+      line-height: 1.3;
+    }
+
     /* ── TOAST ────────────────────────────────────────── */
     #toast {
       position: fixed;
@@ -763,6 +889,7 @@
   <button id="tab-lista"                         onclick="apriTab('lista')">📋 Lista</button>
   <button id="tab-riepilogo"                     onclick="apriTab('riepilogo')">📊 Mese</button>
   <button id="tab-calendario"                    onclick="apriTab('calendario')">📅 Cal.</button>
+  <button id="tab-controlli"                      onclick="apriTab('controlli')">🔍 Check</button>
   <button id="tab-impostazioni"                  onclick="apriTab('impostazioni')">⚙️ Importi</button>
 </div>
 
@@ -911,6 +1038,44 @@
   </div>
   <div id="contenuto-calendario">
     <!-- Griglia generata dinamicamente -->
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SEZIONE 6 — CONTROLLI
+═══════════════════════════════════════════════════════ -->
+<div id="sezione-controlli" class="sezione">
+  <div class="filtro-mese">
+    <select id="filtro-controlli" onchange="renderControlli()">
+      <!-- Popolato dinamicamente -->
+    </select>
+  </div>
+
+  <div class="disclaimer-box">
+    ⚠️ Questi controlli confrontano i tuoi dati con le soglie che imposti tu.
+    Non sono giudizi normativi: gli avvisi e gli ANQ sono <strong>possibili
+    anomalie da verificare</strong>, non violazioni certe.
+  </div>
+
+  <div id="contenuto-controlli">
+    <!-- Generato dinamicamente -->
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-titolo">⚙️ Impostazioni controlli</div>
+    <p class="imp-nota">Attiva/disattiva ogni controllo e regola le soglie. Le impostazioni vengono salvate e incluse nel backup.</p>
+
+    <div class="ctrl-sezione-titolo">Soglie</div>
+    <div class="imp-riga"><span>Durata massima turno (ore)</span><input type="text" inputmode="decimal" id="ctrl-sogliaDurata"></div>
+    <div class="imp-riga"><span>Riposo minimo tra turni (ore)</span><input type="text" inputmode="decimal" id="ctrl-sogliaRiposo"></div>
+    <div class="imp-riga"><span>Max pomeriggi a settimana</span><input type="text" inputmode="numeric" id="ctrl-sogliaPomeriggi"></div>
+    <div class="imp-riga"><span>Max notti consecutive</span><input type="text" inputmode="numeric" id="ctrl-sogliaNotti"></div>
+
+    <div class="ctrl-sezione-titolo">Attiva / disattiva controlli</div>
+    <div id="ctrl-toggle-lista"><!-- generato dinamicamente --></div>
+
+    <button class="btn btn-primary" style="margin-top:12px" onclick="salvaImpControlli()">💾 Salva impostazioni controlli</button>
+    <button class="btn btn-backup" style="margin-top:8px" onclick="ripristinaIgnorati()">👁 Mostra di nuovo gli avvisi ignorati</button>
   </div>
 </div>
 
@@ -1154,6 +1319,7 @@ function apriTab(nome) {
   if (nome === 'lista')         renderLista();
   if (nome === 'riepilogo')     renderRiepilogo();
   if (nome === 'calendario')    renderCalendario();
+  if (nome === 'controlli')     renderControlli();
   if (nome === 'impostazioni')  renderImpostazioni();
 }
 
@@ -1844,8 +2010,9 @@ function esportaBackup() {
     versione:   BACKUP_VERSIONE,
     dataBackup: new Date().toISOString(),  // data e ora del backup
     turni:      caricaTurni(),
-    importi:    caricaImporti()            // include anche radiazioniAttiva
+    importi:    caricaImporti(),           // include anche radiazioniAttiva
                                            // e artificieriAttiva
+    controlli:  caricaControlli()          // soglie, on/off e avvisi ignorati
   };
 
   // Crea il file e fa partire il download
@@ -1913,6 +2080,10 @@ function importaBackup(event) {
     // ── 4. Sovrascrive i dati ──
     salvaTurniStorage(backup.turni);
     salvaImportiStorage(Object.assign({}, IMPORTI_DEFAULT, backup.importi));
+    // Le impostazioni controlli sono opzionali: i backup vecchi non le hanno
+    if (backup.controlli && typeof backup.controlli === 'object') {
+      salvaControlliStorage(backup.controlli);
+    }
 
     // Aggiorna tutte le schermate con i nuovi dati
     aggiornaEtichetteStra();
@@ -1955,6 +2126,9 @@ function cancellaTuttiIDati() {
     importiAzzerati[k] = (typeof IMPORTI_DEFAULT[k] === 'boolean') ? false : 0;
   });
   salvaImportiStorage(importiAzzerati);
+
+  // Rimuove anche le impostazioni dei controlli (torneranno ai default)
+  localStorage.removeItem(CHIAVE_CONTROLLI);
 
   // Riporta l'app allo stato iniziale
   resetForm();
@@ -2165,6 +2339,391 @@ function chiudiSceltaGiorno(event) {
   // Se chiamata dal click sullo sfondo, chiude. Se chiamata da un
   // pulsante interno (senza event), chiude comunque.
   document.getElementById('cal-scelta-overlay').classList.remove('visibile');
+}
+
+// ─────────────────────────────────────────────────────────
+//  CONTROLLI — motore di analisi del mese
+//  Legge i turni e segnala anomalie. NON modifica nulla,
+//  NON blocca il salvataggio: solo segnalazioni.
+//  Gli avvisi e gli ANQ sono "possibili anomalie da
+//  verificare", non violazioni certe.
+// ─────────────────────────────────────────────────────────
+
+const CHIAVE_CONTROLLI = 'turni_ps_controlli_v1';
+
+const CONTROLLI_DEF = [
+  // ── Errori dati ──
+  { id: 'orariMancanti',     cat: 'errore', label: 'Turno lavorato senza orari' },
+  { id: 'statoConOrari',     cat: 'errore', label: 'RS/Assente con orari compilati' },
+  { id: 'statoConExtra',     cat: 'errore', label: 'RS/Assente con indennità/straordinari/caratteristiche' },
+  { id: 'durataImpossibile', cat: 'errore', label: 'Durata negativa o nulla su turno lavorato' },
+  { id: 'durataEccessiva',   cat: 'errore', label: 'Durata oltre la soglia massima' },
+  { id: 'straOltreDurata',   cat: 'errore', label: 'Straordinario maggiore della durata del turno' },
+  { id: 'doppioOrario',      cat: 'errore', label: 'Due turni stessa data e stesso orario' },
+  { id: 'opDoppio',          cat: 'errore', label: 'OP sede e OP fuori sede insieme' },
+  // ── Avvisi di coerenza ──
+  { id: 'notteSenzaIdx',     cat: 'avviso', label: 'Fascia Notte senza indennità notturna' },
+  { id: 'idxSenzaNotte',     cat: 'avviso', label: 'Indennità notturna su turno non notturno' },
+  { id: 'domenicaNoFest',    cat: 'avviso', label: 'Domenica senza flag Festivo' },
+  { id: 'festInferiale',     cat: 'avviso', label: 'Festivo in giorno feriale' },
+  { id: 'opSenzaSede',       cat: 'avviso', label: 'OP senza sede/località' },
+  { id: 'missioneVuota',     cat: 'avviso', label: 'Missione senza sede né note' },
+  // ── ANQ configurabili ──
+  { id: 'anqRiposo',         cat: 'anq', label: 'Riposo minimo tra turni' },
+  { id: 'anqPomeriggi',      cat: 'anq', label: 'Max pomeriggi a settimana' },
+  { id: 'anqNotti',          cat: 'anq', label: 'Max notti consecutive' },
+  { id: 'anqRsSettimana',    cat: 'anq', label: 'Almeno un RS a settimana' },
+  { id: 'anqReperibilita',   cat: 'anq', label: 'Conteggio reperibilità nel mese' }
+];
+
+const CONTROLLI_DEFAULT = {
+  sogliaDurata:    13,
+  sogliaRiposo:    11,
+  sogliaPomeriggi: 3,
+  sogliaNotti:     3,
+  attivi: {},
+  ignorati: []
+};
+CONTROLLI_DEF.forEach(c => { CONTROLLI_DEFAULT.attivi[c.id] = true; });
+
+function caricaControlli() {
+  try {
+    const raw = localStorage.getItem(CHIAVE_CONTROLLI);
+    const base = JSON.parse(JSON.stringify(CONTROLLI_DEFAULT));
+    if (!raw) return base;
+    const salv = JSON.parse(raw);
+    base.sogliaDurata    = salv.sogliaDurata    != null ? salv.sogliaDurata    : base.sogliaDurata;
+    base.sogliaRiposo    = salv.sogliaRiposo    != null ? salv.sogliaRiposo    : base.sogliaRiposo;
+    base.sogliaPomeriggi = salv.sogliaPomeriggi != null ? salv.sogliaPomeriggi : base.sogliaPomeriggi;
+    base.sogliaNotti     = salv.sogliaNotti     != null ? salv.sogliaNotti     : base.sogliaNotti;
+    if (salv.attivi)   Object.assign(base.attivi, salv.attivi);
+    if (Array.isArray(salv.ignorati)) base.ignorati = salv.ignorati;
+    return base;
+  } catch (e) {
+    return JSON.parse(JSON.stringify(CONTROLLI_DEFAULT));
+  }
+}
+
+function salvaControlliStorage(cfg) {
+  localStorage.setItem(CHIAVE_CONTROLLI, JSON.stringify(cfg));
+}
+
+// Settimana ISO (anno-Wnn) di una data
+function settimanaISO(iso) {
+  const d = new Date(iso + 'T12:00:00');
+  const giovedi = new Date(d);
+  giovedi.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 3);
+  const primoGiovedi = new Date(giovedi.getFullYear(), 0, 4);
+  const sett = 1 + Math.round(
+    ((giovedi - primoGiovedi) / 86400000 - 3 + ((primoGiovedi.getDay() + 6) % 7)) / 7
+  );
+  return giovedi.getFullYear() + '-W' + String(sett).padStart(2, '0');
+}
+
+// Indica se un turno "sembra" notturno (per avvisi di coerenza)
+function sembraNotturno(t) {
+  if (!t.inizio || !t.fine) return false;
+  const attraversaMezzanotte = t.fine <= t.inizio;
+  const [hI] = t.inizio.split(':').map(Number);
+  return attraversaMezzanotte || hI >= 21 || hI < 5;
+}
+
+// ── MOTORE PRINCIPALE ──
+function eseguiControlli(mese) {
+  const cfg = caricaControlli();
+  const att = cfg.attivi;
+  const problemi = [];
+
+  function aggiungi(idCtrl, cat, gravita, data, descr, turnoId) {
+    if (!att[idCtrl]) return;
+    problemi.push({ idCtrl, cat, gravita, data: data || '', descr, turnoId: turnoId || null });
+  }
+
+  const tutti = caricaTurni()
+    .filter(t => t.data && t.data.startsWith(mese))
+    .sort((a, b) => (a.data + (a.inizio || '')).localeCompare(b.data + (b.inizio || '')));
+
+  const sogliaDurataMin = (parseFloat(cfg.sogliaDurata) || 13) * 60;
+
+  // ══ ERRORI DATI e AVVISI (per singolo turno) ══
+  tutti.forEach(t => {
+    const f = t.flags || {};
+    const s = t.stra  || {};
+    const haStra = (s.diurno || 0) + (s.nottFest || 0) + (s.speciale || 0) > 0;
+    const haFlag = Object.keys(f).some(k => f[k]);
+
+    if (t.stato) {
+      if (t.inizio || t.fine)
+        aggiungi('statoConOrari', 'errore', 'errore', t.data,
+          `${t.stato} del ${formattaData(t.data)} ha orari compilati.`, t.id);
+      if (haStra || haFlag)
+        aggiungi('statoConExtra', 'errore', 'errore', t.data,
+          `${t.stato} del ${formattaData(t.data)} ha caratteristiche o straordinari attivi.`, t.id);
+    } else {
+      if (!t.inizio || !t.fine)
+        aggiungi('orariMancanti', 'errore', 'errore', t.data,
+          `Turno del ${formattaData(t.data)} senza ora inizio/fine.`, t.id);
+
+      if (t.inizio && t.fine) {
+        const dur = t.durata != null ? t.durata : calcolaMinuti(t.inizio, t.fine);
+        if (dur <= 0)
+          aggiungi('durataImpossibile', 'errore', 'errore', t.data,
+            `Turno del ${formattaData(t.data)} con durata nulla o impossibile.`, t.id);
+        if (dur > sogliaDurataMin)
+          aggiungi('durataEccessiva', 'errore', 'errore', t.data,
+            `Turno del ${formattaData(t.data)} dura ${(dur/60).toFixed(1)}h, oltre la soglia di ${cfg.sogliaDurata}h.`, t.id);
+        const oreStraTot = (s.diurno || 0) + (s.nottFest || 0) + (s.speciale || 0);
+        if (oreStraTot * 60 > dur)
+          aggiungi('straOltreDurata', 'errore', 'errore', t.data,
+            `Straordinario (${oreStraTot}h) maggiore della durata del turno (${(dur/60).toFixed(1)}h) il ${formattaData(t.data)}.`, t.id);
+      }
+
+      if (f.opSede && (f.opFuori1 || f.opFuoriIntera))
+        aggiungi('opDoppio', 'errore', 'errore', t.data,
+          `OP sede e OP fuori sede attivi insieme il ${formattaData(t.data)}.`, t.id);
+
+      // ── Avvisi di coerenza ──
+      if (t.tipo === 'Notte' && !f.nottIdx)
+        aggiungi('notteSenzaIdx', 'avviso', 'avviso', t.data,
+          `Turno in fascia Notte il ${formattaData(t.data)} senza indennità servizio notturno: da verificare.`, t.id);
+      if (f.nottIdx && !sembraNotturno(t) && t.tipo !== 'Notte')
+        aggiungi('idxSenzaNotte', 'avviso', 'avviso', t.data,
+          `Indennità notturna il ${formattaData(t.data)} su un turno che non sembra notturno: da verificare.`, t.id);
+
+      const dow = new Date(t.data + 'T12:00:00').getDay();
+      if (dow === 0 && !f.festivo)
+        aggiungi('domenicaNoFest', 'avviso', 'avviso', t.data,
+          `Domenica ${formattaData(t.data)} senza flag Festivo: da verificare.`, t.id);
+      if (f.festivo && dow !== 0)
+        aggiungi('festInferiale', 'avviso', 'avviso', t.data,
+          `Festivo in giorno feriale (${formattaData(t.data)}): verifica se è festività infrasettimanale.`, t.id);
+
+      if ((f.opSede || f.opFuori1 || f.opFuoriIntera) && !(t.sede && t.sede.trim()))
+        aggiungi('opSenzaSede', 'avviso', 'avviso', t.data,
+          `Servizio OP il ${formattaData(t.data)} senza sede/località indicata.`, t.id);
+      if (f.missione && !(t.sede && t.sede.trim()) && !(t.note && t.note.trim()))
+        aggiungi('missioneVuota', 'avviso', 'avviso', t.data,
+          `Missione il ${formattaData(t.data)} senza sede né note.`, t.id);
+    }
+  });
+
+  // ══ ERRORI: doppioni di orario nella stessa data ══
+  const perData = {};
+  tutti.filter(t => !t.stato).forEach(t => {
+    (perData[t.data] = perData[t.data] || []).push(t);
+  });
+  Object.entries(perData).forEach(([data, lista]) => {
+    const visti = {};
+    lista.forEach(t => {
+      const k = (t.inizio || '') + '-' + (t.fine || '');
+      if (t.inizio && visti[k])
+        aggiungi('doppioOrario', 'errore', 'errore', data,
+          `Due turni con lo stesso orario (${k}) il ${formattaData(data)}.`, t.id);
+      visti[k] = true;
+    });
+  });
+
+  // ══ ANQ: riposo minimo tra turni consecutivi ══
+  const lavorati = tutti.filter(t => !t.stato && t.inizio && t.fine);
+  if (att.anqRiposo) {
+    const sogliaRiposoMin = (parseFloat(cfg.sogliaRiposo) || 11) * 60;
+    for (let i = 1; i < lavorati.length; i++) {
+      const prec = lavorati[i - 1], cur = lavorati[i];
+      const finePrec = new Date(prec.data + 'T' + prec.fine + ':00');
+      if (prec.fine <= prec.inizio) finePrec.setDate(finePrec.getDate() + 1);
+      const inizioCur = new Date(cur.data + 'T' + cur.inizio + ':00');
+      const gapMin = (inizioCur - finePrec) / 60000;
+      if (gapMin >= 0 && gapMin < sogliaRiposoMin)
+        aggiungi('anqRiposo', 'anq', 'info', cur.data,
+          `Possibile anomalia da verificare: solo ${(gapMin/60).toFixed(1)}h di riposo tra il turno del ${formattaData(prec.data)} e quello del ${formattaData(cur.data)} (soglia ${cfg.sogliaRiposo}h).`, cur.id);
+    }
+  }
+
+  // ══ ANQ: max pomeriggi a settimana ══
+  if (att.anqPomeriggi) {
+    const pomPerSett = {};
+    tutti.filter(t => !t.stato && t.tipo === 'Pomeriggio').forEach(t => {
+      const w = settimanaISO(t.data);
+      pomPerSett[w] = (pomPerSett[w] || 0) + 1;
+    });
+    Object.entries(pomPerSett).forEach(([w, n]) => {
+      if (n > (parseInt(cfg.sogliaPomeriggi) || 3))
+        aggiungi('anqPomeriggi', 'anq', 'info', '',
+          `Possibile anomalia da verificare: ${n} pomeriggi nella settimana ${w} (soglia ${cfg.sogliaPomeriggi}).`, null);
+    });
+  }
+
+  // ══ ANQ: max notti consecutive ══
+  if (att.anqNotti) {
+    const soglia = parseInt(cfg.sogliaNotti) || 3;
+    const notti = tutti.filter(t => !t.stato && t.tipo === 'Notte').map(t => t.data).sort();
+    let run = 0, prevDate = null, inizioRun = null;
+    notti.forEach(d => {
+      if (prevDate) {
+        const diff = (new Date(d) - new Date(prevDate)) / 86400000;
+        if (diff === 1) run++; else { run = 1; inizioRun = d; }
+      } else { run = 1; inizioRun = d; }
+      prevDate = d;
+      if (run > soglia)
+        aggiungi('anqNotti', 'anq', 'info', d,
+          `Possibile anomalia da verificare: ${run} notti consecutive (da ${formattaData(inizioRun)}), soglia ${soglia}.`, null);
+    });
+  }
+
+  // ══ ANQ: almeno un RS a settimana ══
+  if (att.anqRsSettimana) {
+    const settConTurni = {}, settConRS = {};
+    tutti.forEach(t => {
+      const w = settimanaISO(t.data);
+      if (t.stato === 'RS') settConRS[w] = true;
+      settConTurni[w] = true;
+    });
+    Object.keys(settConTurni).forEach(w => {
+      if (!settConRS[w])
+        aggiungi('anqRsSettimana', 'anq', 'info', '',
+          `Possibile anomalia da verificare: nessun RS nella settimana ${w}.`, null);
+    });
+  }
+
+  // ══ ANQ: conteggio reperibilità ══
+  if (att.anqReperibilita) {
+    const n = tutti.filter(t => t.flags && t.flags.reperibilita).length;
+    if (n > 0)
+      aggiungi('anqReperibilita', 'anq', 'info', '',
+        `Reperibilità nel mese: ${n} ${n === 1 ? 'servizio' : 'servizi'} (solo conteggio informativo).`, null);
+  }
+
+  const ignorati = new Set(cfg.ignorati);
+  const visibili = problemi.filter(p => !ignorati.has(improntaProblema(p)));
+  return { problemi: visibili, totali: problemi.length, ignorati: problemi.length - visibili.length };
+}
+
+function improntaProblema(p) {
+  return p.idCtrl + '|' + p.data + '|' + (p.turnoId || '') + '|' + p.descr.slice(0, 40);
+}
+
+// ── RENDER della tab Controlli ──
+function renderControlli() {
+  popolaSelettoreMese('filtro-controlli');
+  caricaImpControlli();
+
+  const mese = document.getElementById('filtro-controlli').value;
+  const el   = document.getElementById('contenuto-controlli');
+  const r    = eseguiControlli(mese);
+
+  const conta = { errore: 0, avviso: 0, info: 0 };
+  r.problemi.forEach(p => { conta[p.gravita]++; });
+
+  let html = `
+    <div class="ctrl-sommario">
+      <div class="ctrl-sommario-box"><div class="ctrl-sommario-num ctrl-num-errore">${conta.errore}</div><div class="ctrl-sommario-lab">Errori</div></div>
+      <div class="ctrl-sommario-box"><div class="ctrl-sommario-num ctrl-num-avviso">${conta.avviso}</div><div class="ctrl-sommario-lab">Avvisi</div></div>
+      <div class="ctrl-sommario-box"><div class="ctrl-sommario-num ctrl-num-info">${conta.info}</div><div class="ctrl-sommario-lab">ANQ / Info</div></div>
+    </div>`;
+
+  if (r.problemi.length === 0) {
+    html += `
+      <div class="card">
+        <div class="ctrl-ok">
+          <div class="ctrl-ok-icona">✅</div>
+          Nessun problema rilevato in questo mese.
+          ${r.ignorati > 0 ? `<div style="font-size:0.78rem;color:#94A3B8;margin-top:6px;font-weight:400">${r.ignorati} avvisi ignorati nascosti</div>` : ''}
+        </div>
+      </div>`;
+    el.innerHTML = html;
+    return;
+  }
+
+  const categorie = [
+    { cat: 'errore', titolo: '🔴 Errori dati' },
+    { cat: 'avviso', titolo: '🟠 Avvisi di coerenza' },
+    { cat: 'anq',    titolo: '🔵 Controlli ANQ (da verificare)' }
+  ];
+
+  categorie.forEach(({ cat, titolo }) => {
+    const items = r.problemi.filter(p => p.cat === cat);
+    if (items.length === 0) return;
+    html += `<div class="ctrl-categoria-titolo">${titolo} (${items.length})</div>`;
+    items.forEach(p => {
+      const imp = improntaProblema(p).replace(/'/g, "\\'");
+      const btnApri = p.turnoId
+        ? `<button class="ctrl-btn ctrl-btn-apri" onclick="modificaTurno('${p.turnoId}')">✏️ Apri turno</button>`
+        : '';
+      html += `
+        <div class="ctrl-item g-${p.gravita}">
+          <div class="ctrl-item-top">
+            <span class="ctrl-gravita g-${p.gravita}">${p.gravita}</span>
+            ${p.data ? `<span class="ctrl-data">${formattaData(p.data)}</span>` : ''}
+          </div>
+          <div class="ctrl-descr">${esc(p.descr)}</div>
+          <div class="ctrl-azioni">
+            ${btnApri}
+            <button class="ctrl-btn ctrl-btn-ignora" onclick="ignoraProblema('${imp}')">🙈 Ignora</button>
+          </div>
+        </div>`;
+    });
+  });
+
+  if (r.ignorati > 0)
+    html += `<div style="font-size:0.78rem;color:#94A3B8;text-align:center;margin-top:10px">${r.ignorati} avvisi ignorati nascosti</div>`;
+
+  el.innerHTML = html;
+}
+
+function ignoraProblema(impronta) {
+  const cfg = caricaControlli();
+  if (!cfg.ignorati.includes(impronta)) cfg.ignorati.push(impronta);
+  salvaControlliStorage(cfg);
+  renderControlli();
+  toast('🙈 Avviso ignorato');
+}
+
+function ripristinaIgnorati() {
+  const cfg = caricaControlli();
+  cfg.ignorati = [];
+  salvaControlliStorage(cfg);
+  renderControlli();
+  toast('👁 Avvisi ripristinati');
+}
+
+function caricaImpControlli() {
+  const cfg = caricaControlli();
+  document.getElementById('ctrl-sogliaDurata').value    = cfg.sogliaDurata;
+  document.getElementById('ctrl-sogliaRiposo').value    = cfg.sogliaRiposo;
+  document.getElementById('ctrl-sogliaPomeriggi').value = cfg.sogliaPomeriggi;
+  document.getElementById('ctrl-sogliaNotti').value     = cfg.sogliaNotti;
+
+  const cont = document.getElementById('ctrl-toggle-lista');
+  if (cont.children.length === 0) {
+    let html = '';
+    CONTROLLI_DEF.forEach(c => {
+      html += `
+        <div class="ctrl-toggle">
+          <span class="ctrl-toggle-nome">${esc(c.label)}</span>
+          <label class="flag-chip"><input type="checkbox" id="ctrl-att-${c.id}"><span>ON</span></label>
+        </div>`;
+    });
+    cont.innerHTML = html;
+  }
+  CONTROLLI_DEF.forEach(c => {
+    const chk = document.getElementById('ctrl-att-' + c.id);
+    if (chk) chk.checked = !!cfg.attivi[c.id];
+  });
+}
+
+function salvaImpControlli() {
+  const cfg = caricaControlli();
+  cfg.sogliaDurata    = leggiNumero(document.getElementById('ctrl-sogliaDurata').value)    || 13;
+  cfg.sogliaRiposo    = leggiNumero(document.getElementById('ctrl-sogliaRiposo').value)    || 11;
+  cfg.sogliaPomeriggi = Math.round(leggiNumero(document.getElementById('ctrl-sogliaPomeriggi').value)) || 3;
+  cfg.sogliaNotti     = Math.round(leggiNumero(document.getElementById('ctrl-sogliaNotti').value))     || 3;
+  CONTROLLI_DEF.forEach(c => {
+    const chk = document.getElementById('ctrl-att-' + c.id);
+    if (chk) cfg.attivi[c.id] = chk.checked;
+  });
+  salvaControlliStorage(cfg);
+  renderControlli();
+  toast('✅ Impostazioni controlli salvate');
 }
 
 // ─────────────────────────────────────────────────────────
