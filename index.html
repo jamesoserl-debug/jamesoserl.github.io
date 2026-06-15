@@ -1039,6 +1039,66 @@
       padding: 12px 0 4px;
     }
 
+    /* Selettore modalità import */
+    .import-modi {
+      display: flex;
+      gap: 7px;
+      margin-bottom: 14px;
+    }
+    .import-modo {
+      flex: 1;
+      padding: 9px 6px;
+      background: #F4F7FA;
+      border: 1.5px solid #DDE3EC;
+      border-radius: 9px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #64748B;
+      cursor: pointer;
+    }
+    .import-modo.attivo {
+      background: #1C2B3A;
+      border-color: #1C2B3A;
+      color: #fff;
+    }
+
+    /* Campi giornalieri editabili dell'OCR */
+    .giorno-ocr {
+      background: #fff;
+      border-radius: 10px;
+      padding: 11px 12px;
+      margin-bottom: 8px;
+      border-left: 4px solid #2563EB;
+    }
+    .giorno-ocr-label {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #1C2B3A;
+      margin-bottom: 6px;
+    }
+    .giorno-ocr textarea {
+      width: 100%;
+      height: 52px;
+      padding: 8px 10px;
+      background: #F4F7FA;
+      border: 1.5px solid #DDE3EC;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-family: monospace;
+      color: #1C2B3A;
+      resize: vertical;
+    }
+    .ocr-avviso-blocchi {
+      background: #FEF3C7;
+      border: 1.5px solid #F59E0B;
+      border-radius: 9px;
+      padding: 11px 13px;
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: #92400E;
+      margin-bottom: 12px;
+    }
+
     /* Guida OCR nella tab Import */
     .ocr-guida {
       background: #F0F9FF;
@@ -1267,17 +1327,10 @@
 <div id="sezione-import" class="sezione">
   <div class="card">
     <div class="card-titolo">📥 Import settimanale</div>
-    <p class="imp-nota">
-      Incolla il testo del settimanale. L'app proporrà delle bozze
-      <strong>tutte come "Previsto"</strong>: potrai correggerle prima di salvare.
-      Nulla viene salvato senza la tua conferma.
-    </p>
 
-    <div class="ocr-guida">
-      📷 <strong>Settimanale in foto o screenshot?</strong>
-      Usa <strong>Google Lens</strong> (Android) o <strong>Foto / Testo attivo</strong> (iPhone)
-      per copiare il testo dall'immagine, poi incollalo qui sotto.
-      L'app analizzerà il testo solo dopo che premi <strong>Analizza</strong>.
+    <div class="import-modi">
+      <button class="import-modo attivo" id="modo-strutturato" onclick="cambiaModoImport('strutturato')">📋 Testo per giorni</button>
+      <button class="import-modo" id="modo-ocr" onclick="cambiaModoImport('ocr')">📷 OCR riga personale</button>
     </div>
 
     <div class="campo">
@@ -1285,21 +1338,50 @@
       <input type="date" id="import-lunedi">
     </div>
 
-    <div class="campo">
-      <label>Testo del settimanale</label>
-      <textarea id="import-testo" style="height:160px;font-family:monospace;font-size:0.85rem" placeholder="LUN: RS
+    <!-- ── MODALITÀ 1: testo già diviso per giorni (LUN: …) ── -->
+    <div id="blocco-strutturato">
+      <p class="imp-nota">
+        Incolla il testo con un giorno per riga (LUN:, MAR: …). Le bozze nascono
+        <strong>tutte come "Previsto"</strong>: correggile prima di salvare.
+      </p>
+      <div class="campo">
+        <label>Testo del settimanale</label>
+        <textarea id="import-testo" style="height:150px;font-family:monospace;font-size:0.85rem" placeholder="LUN: RS
 MAR: 06.48 - 14 (ATT. FIS 6.48 - 8.48)
 MER: 12.48 - 20.00 PQ
 GIO: 06.48 - 14 OP REPUBBLICA DELLE IDEE
 VEN: 06.48 - 14.00 (STR. PROG. 14.30 - 17.30)
 SAB: 06.48 - 14.00
 DOM: RS"></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="analizzaSettimanale()">🔍 Analizza testo</button>
     </div>
 
-    <button class="btn btn-primary" onclick="analizzaSettimanale()">🔍 Analizza testo</button>
+    <!-- ── MODALITÀ 2: OCR a colonna unica ── -->
+    <div id="blocco-ocr" style="display:none">
+      <div class="ocr-guida">
+        📷 <strong>Settimanale in foto o screenshot?</strong>
+        Usa <strong>Google Lens</strong> (Android) o <strong>Foto / Testo attivo</strong> (iPhone)
+        per copiare il testo dall'immagine, poi incollalo qui sotto. L'OCR esce spesso come
+        colonna unica: l'app proverà a dividere i 7 giorni in ordine Lun→Dom, e tu correggerai prima di salvare.
+      </div>
+      <div class="campo">
+        <label>Testo OCR grezzo (colonna unica)</label>
+        <textarea id="import-ocr-testo" style="height:170px;font-family:monospace;font-size:0.85rem" placeholder="Ag. Sc.
+PALMIERO
+Armando
+12.48-20.00
+6.48-14.00
+6.48-08.48
+att.fis.
+PQ
+..."></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="analizzaOcrRiga()">🔍 Dividi nei 7 giorni</button>
+    </div>
   </div>
 
-  <div id="import-bozze"><!-- bozze generate dinamicamente --></div>
+  <div id="import-bozze"><!-- bozze / campi giornalieri generati dinamicamente --></div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════
@@ -2770,9 +2852,9 @@ const GIORNI_MAP = {
 // Bozze correnti in memoria (non ancora salvate)
 let BOZZE = [];
 
-// Normalizza un orario: "6.48"→"06:48", "14"→"14:00"
+// Normalizza un orario: "6.48"/"6,48"→"06:48", "8:48"→"08:48", "14"→"14:00"
 function normOrario(s) {
-  s = s.trim().replace('.', ':');
+  s = s.trim().replace(',', ':').replace('.', ':');
   let [h, m] = s.split(':');
   h = h.padStart(2, '0');
   m = (m || '00').padStart(2, '0');
@@ -2782,7 +2864,7 @@ function normOrario(s) {
 // Estrae il primo intervallo orario "HH.MM - HH.MM" da una stringa.
 // Restituisce {inizio, fine, resto} dove resto è la riga senza quell'intervallo.
 function estraiOrario(testo) {
-  const re = /(\d{1,2}(?:[.:]\d{2})?)\s*[-–]\s*(\d{1,2}(?:[.:]\d{2})?)/;
+  const re = /(\d{1,2}(?:[.,:]\d{2})?)\s*[-–]\s*(\d{1,2}(?:[.,:]\d{2})?)/;
   const m = testo.match(re);
   if (!m) return null;
   return {
@@ -2790,6 +2872,11 @@ function estraiOrario(testo) {
     fine:   normOrario(m[2]),
     resto:  testo.replace(m[0], ' ').replace(/\s+/g, ' ').trim()
   };
+}
+
+// Verifica se una stringa contiene un intervallo orario
+function haIntervallo(testo) {
+  return /(\d{1,2}(?:[.,:]\d{2})?)\s*[-–]\s*(\d{1,2}(?:[.,:]\d{2})?)/.test(testo);
 }
 
 // Deduce la fascia dall'orario di inizio/fine
@@ -2855,6 +2942,202 @@ function analizzaSettimanale() {
   renderBozze();
 }
 
+// ─────────────────────────────────────────────────────────
+//  MODALITÀ OCR RIGA PERSONALE
+//  L'OCR esce a colonna unica senza intestazioni di giorno.
+//  Qui deduciamo i confini dei 7 giorni dalla sequenza, poi
+//  mostriamo 7 campi editabili. Da lì si riusa il parser
+//  standard (creaBozza) per generare le bozze "Previsto".
+// ─────────────────────────────────────────────────────────
+
+// Cambia tra le due modalità di import
+function cambiaModoImport(modo) {
+  const isOcr = modo === 'ocr';
+  document.getElementById('blocco-strutturato').style.display = isOcr ? 'none' : '';
+  document.getElementById('blocco-ocr').style.display = isOcr ? '' : 'none';
+  document.getElementById('modo-strutturato').classList.toggle('attivo', !isOcr);
+  document.getElementById('modo-ocr').classList.toggle('attivo', isOcr);
+  document.getElementById('import-bozze').innerHTML = '';
+}
+
+// Riconosce se una riga è "rumore" iniziale (grado, cognome, nome):
+// nessun orario, nessuna sigla nota, solo lettere.
+function rigaRumoreIniziale(riga) {
+  const up = riga.toUpperCase();
+  if (haIntervallo(riga)) return false;
+  const sigleNote = /\b(RS|RIPOSO|FERIE|MALATTIA|PERMESSO|CONGEDO|RECUPERO|ASSENTE|PQ|OP|O\.P\.|ATT|FIS|STR|PROG|MISSIONE|POLIGONO|AGG|FORMAZIONE|FEST|NOTTE|SERV)\b/;
+  if (sigleNote.test(up)) return false;
+  // Solo testo alfabetico (probabile grado/nome/cognome)
+  return /^[A-Za-zÀ-ÿ.\s]+$/.test(riga.trim()) && riga.trim().length > 0;
+}
+
+// Riconosce se una riga (o la sua vicina) indica attività fisica
+function eAttFis(riga) {
+  return /ATT\.?\s*FIS/i.test(riga);
+}
+// Riconosce se una riga indica straordinario programmato
+function eStrProg(riga) {
+  return /STR\.?\s*PROG/i.test(riga);
+}
+
+// ── SEGMENTAZIONE: distribuisce le righe OCR sui giorni ──
+function analizzaOcrRiga() {
+  const lunedi = document.getElementById('import-lunedi').value;
+  const testo  = document.getElementById('import-ocr-testo').value;
+
+  if (!lunedi) { alert('Indica la data del lunedì di quella settimana.'); return; }
+  if (!testo.trim()) { alert('Incolla il testo OCR.'); return; }
+
+  // Righe pulite, senza vuote
+  let righe = testo.split('\n').map(r => r.trim()).filter(r => r);
+
+  // Salta le righe di rumore iniziale (grado/cognome/nome) finché non
+  // incontriamo la prima riga "utile" (orario o sigla di stato)
+  while (righe.length && rigaRumoreIniziale(righe[0])) righe.shift();
+
+  // ── Costruzione dei blocchi-giorno ──
+  // Un nuovo giorno si apre con: un orario-intervallo "principale"
+  // (non sotto-attività) oppure uno stato RS/Assente.
+  const blocchi = [];
+  let corrente = null;
+
+  function nuovoGiorno() { corrente = []; blocchi.push(corrente); }
+
+  for (let i = 0; i < righe.length; i++) {
+    const riga = righe[i];
+    const up = riga.toUpperCase();
+
+    // Stato RS → nuovo giorno-stato
+    if (/^\s*(RS|RIPOSO(?:\s+SETTIMANALE)?)\s*$/.test(up)) {
+      nuovoGiorno(); corrente.push('RS'); corrente._chiuso = true; continue;
+    }
+    // Stato Assente → nuovo giorno-stato
+    if (/^\s*(ASSENTE|FERIE|MALATTIA|PERMESSO|CONGEDO|RECUPERO)\s*$/.test(up)) {
+      nuovoGiorno(); corrente.push(riga); corrente._chiuso = true; continue;
+    }
+
+    const haInt = haIntervallo(riga);
+    const attFisQui = eAttFis(riga);
+    const attFisVicina = (i + 1 < righe.length && eAttFis(righe[i + 1]));
+    const strProgQui = eStrProg(riga);
+    const strProgVicina = (i + 1 < righe.length && eStrProg(righe[i + 1]));
+
+    // È un sotto-orario (att.fis / str.prog)? Allora resta nel giorno corrente.
+    const eSottoOrario = haInt && (attFisQui || attFisVicina || strProgQui || strProgVicina);
+
+    if (haInt && !eSottoOrario) {
+      // Orario principale: se il giorno corrente non esiste o ha già
+      // un principale, apriamo un nuovo giorno.
+      if (!corrente || corrente._chiuso || corrente._haPrincipale) {
+        nuovoGiorno();
+      }
+      corrente.push(riga);
+      corrente._haPrincipale = true;
+      continue;
+    }
+
+    // Qualsiasi altra riga (sotto-orario, att.fis, str.prog, PQ, OP,
+    // numeri ambigui) resta attaccata al giorno corrente.
+    if (!corrente) nuovoGiorno();  // sicurezza: testo che inizia senza principale
+    corrente.push(riga);
+  }
+
+  // Prepara il testo aggregato per ogni blocco (una riga di testo per giorno)
+  const blocchiTesto = blocchi.map(b => b.join(' '));
+
+  renderGiorniOcr(blocchiTesto, lunedi);
+}
+
+// ── RENDER dei 7 campi giornalieri editabili ──
+function renderGiorniOcr(blocchiTesto, lunedi) {
+  const el = document.getElementById('import-bozze');
+  const nomi = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+
+  let html = '';
+
+  // Avviso se il numero di blocchi rilevati ≠ 7
+  if (blocchiTesto.length !== 7) {
+    html += `<div class="ocr-avviso-blocchi">⚠️ Rilevati ${blocchiTesto.length} blocchi invece di 7: controlla i confini dei giorni e correggi i campi qui sotto prima di proseguire.</div>`;
+  }
+
+  html += '<div class="card">';
+  // Mostra sempre 7 campi. Se i blocchi sono di più o di meno, riempie
+  // quelli disponibili e lascia vuoti gli altri (l'utente sistema a mano).
+  for (let g = 0; g < 7; g++) {
+    const data = dataDaLunedi(lunedi, g);
+    const testoG = blocchiTesto[g] || '';
+    html += `
+      <div class="giorno-ocr">
+        <div class="giorno-ocr-label">${nomi[g]} · ${formattaData(data)}</div>
+        <textarea id="ocr-giorno-${g}">${esc(testoG)}</textarea>
+      </div>`;
+  }
+  // Se ci sono blocchi extra (oltre il 7°), li mostro come testo aggiuntivo
+  // da reincollare manualmente, per non perdere dati.
+  if (blocchiTesto.length > 7) {
+    const extra = blocchiTesto.slice(7).join('  |  ');
+    html += `<div class="ocr-avviso-blocchi" style="margin-top:10px">Blocchi in eccesso non assegnati (spostali a mano nei giorni giusti):<br>${esc(extra)}</div>`;
+  }
+  html += '</div>';
+
+  html += `
+    <div class="import-azioni">
+      <button class="btn btn-primary" onclick="generaBozzeDaOcr('${lunedi}')">📋 Genera bozze previste</button>
+      <button class="btn btn-backup" style="margin-top:8px" onclick="annullaImport()">✕ Annulla</button>
+    </div>`;
+
+  el.innerHTML = html;
+}
+
+// ── Dai 7 campi editabili genera le bozze (riusa creaBozza) ──
+function generaBozzeDaOcr(lunedi) {
+  BOZZE = [];
+  for (let g = 0; g < 7; g++) {
+    const campo = document.getElementById('ocr-giorno-' + g);
+    if (!campo) continue;
+    let corpo = campo.value.trim();
+    if (!corpo) continue;  // giorno vuoto: nessuna bozza
+    const data = dataDaLunedi(lunedi, g);
+
+    // Estrai eventuali righe ambigue (token isolati non orari/sigle) e
+    // mettile in coda come nota "OCR ambiguo da verificare".
+    const ambigui = estraiTokenAmbigui(corpo);
+    let corpoUp = corpo.toUpperCase();
+
+    const bozza = creaBozza(data, corpo, corpoUp);
+    // Aggiunge la nota OCR ambiguo, se presente
+    if (ambigui) {
+      const nota = 'OCR ambiguo da verificare: ' + ambigui;
+      bozza.note = bozza.note ? (bozza.note + ' · ' + nota) : nota;
+      bozza.avvisi = bozza.avvisi || [];
+      bozza.avvisi.push('Contiene testo OCR ambiguo: ' + ambigui);
+    }
+    BOZZE.push(bozza);
+  }
+
+  if (BOZZE.length === 0) {
+    alert('Nessun giorno compilato: niente da generare.');
+    return;
+  }
+  renderBozze();
+}
+
+// Trova token "ambigui": numeri isolati o lettere singole che non fanno
+// parte di orari né di sigle note. Non modificano orari o flag.
+function estraiTokenAmbigui(corpo) {
+  // Rimuovi gli intervalli orari dal testo prima di cercare i token
+  let senzaOrari = corpo.replace(/\d{1,2}[.,:]?\d{0,2}\s*[-–]\s*\d{1,2}[.,:]?\d{0,2}/g, ' ');
+  // Rimuovi le sigle note (verranno gestite da creaBozza)
+  senzaOrari = senzaOrari.replace(/\b(ATT\.?\s*FIS\.?|STR\.?\s*PROG\.?|PQ|O\.?P\.?|RS|RIPOSO|FERIE|MALATTIA|PERMESSO|CONGEDO|RECUPERO|ASSENTE|MISSIONE|POLIGONO|AGG\.?|FORMAZIONE|FEST\.?|FESTIVO|NOTTE|SERV\.?\s*EST\.?)\b/gi, ' ');
+  // Quel che resta: token isolati (numeri sciolti, lettere singole)
+  const token = senzaOrari.split(/\s+/).filter(t => {
+    if (!t) return false;
+    // Tieni come ambiguo: numeri puri (1146, 2000) o lettere singole (G)
+    return /^[A-Za-z0-9]+$/.test(t) && (/^\d+$/.test(t) || t.length <= 2);
+  });
+  return token.length ? token.join(' ') : '';
+}
+
 // Crea una bozza interpretando il corpo di una riga
 function creaBozza(data, corpo, corpoUp) {
   const avvisi = [];
@@ -2910,53 +3193,72 @@ function creaBozza(data, corpo, corpoUp) {
     resto = resto.replace(/\bPQ\b/i, ' ');
   }
 
+  // ── STR. PROG. = straordinario programmato ──
+  // Processato PRIMA di att.fis: così il suo orario viene rimosso dal
+  // testo e non rischia di essere agganciato per errore dall'att.fis.
+  if (/STR\.?\s*PROG/i.test(restoUp)) {
+    // L'orario può precedere o seguire la sigla
+    const mPrima = resto.match(/(\d{1,2}(?:[.,:]\d{2})?)\s*[-–]\s*(\d{1,2}(?:[.,:]\d{2})?)\s*STR\.?\s*PROG/i);
+    const mDopo  = resto.match(/STR\.?\s*PROG\.?\s*(\d{1,2}(?:[.,:]\d{2})?)\s*[-–]\s*(\d{1,2}(?:[.,:]\d{2})?)/i);
+    const m = mPrima || mDopo;
+    if (m) {
+      const sI = normOrario(m[1]);
+      const sF = normOrario(m[2]);
+      const ore = oreTra(sI, sF);
+      const notturnoStra = parseInt(sI.split(':')[0], 10) >= 22 || parseInt(sI.split(':')[0], 10) < 6;
+      if (notturnoStra) {
+        avvisi.push(`Straordinario ${sI}–${sF} in possibile fascia notturna: da verificare, non compilato automaticamente.`);
+        noteParti.push(`Straordinario programmato ${sI}–${sF} (da verificare fascia)`);
+      } else {
+        stra.diurno = ore;
+        noteParti.push(`Straordinario programmato ${sI}–${sF}`);
+      }
+      resto = resto.replace(m[0], ' ');
+    } else {
+      avvisi.push('STR. PROG. senza orario chiaro: da verificare.');
+      noteParti.push('Straordinario programmato (orario da verificare)');
+    }
+    resto = resto.replace(/STR\.?\s*PROG\.?/i, ' ');
+    restoUp = resto.toUpperCase();
+  }
+
   // ── ATT. FIS = attività fisica (solo nota, niente ore) ──
-  const mAtt = restoUp.match(/ATT\.?\s*FIS\.?\s*(\d{1,2}(?:[.:]\d{2})?\s*[-–]\s*\d{1,2}(?:[.:]\d{2})?)?/);
-  if (mAtt) {
+  // L'orario può stare PRIMA della sigla (formato OCR) o DOPO (strutturato).
+  // Diamo priorità all'orario che PRECEDE, tipico dell'OCR.
+  if (/ATT\.?\s*FIS/i.test(restoUp)) {
     let orarioAtt = '';
-    if (mAtt[1]) {
-      const oa = estraiOrario(mAtt[1]);
+    const mPrima = resto.match(/(\d{1,2}(?:[.,:]\d{2})?\s*[-–]\s*\d{1,2}(?:[.,:]\d{2})?)\s*ATT\.?\s*FIS/i);
+    const mDopo  = resto.match(/ATT\.?\s*FIS\.?\s*(\d{1,2}(?:[.,:]\d{2})?\s*[-–]\s*\d{1,2}(?:[.,:]\d{2})?)/i);
+    const blocco = mPrima ? mPrima[1] : (mDopo ? mDopo[1] : null);
+    if (blocco) {
+      const oa = estraiOrario(blocco);
       if (oa) orarioAtt = ` ${oa.inizio}–${oa.fine}`;
+      resto = resto.replace(blocco, ' ');
     }
     noteParti.push('Attività fisica' + orarioAtt);
-    // rimuovi il blocco att.fis. dal resto
-    resto = resto.replace(/ATT\.?\s*FIS\.?\s*\d{0,2}[.:]?\d{0,2}\s*[-–]?\s*\d{0,2}[.:]?\d{0,2}/i, ' ');
+    resto = resto.replace(/ATT\.?\s*FIS\.?/i, ' ');
+    restoUp = resto.toUpperCase();
   }
 
-  // ── STR. PROG. = straordinario programmato ──
-  const mStr = restoUp.match(/STR\.?\s*PROG\.?\s*(\d{1,2}(?:[.:]\d{2})?)\s*[-–]\s*(\d{1,2}(?:[.:]\d{2})?)/);
-  if (mStr) {
-    const sI = normOrario(mStr[1]);
-    const sF = normOrario(mStr[2]);
-    const ore = oreTra(sI, sF);
-    const notturnoStra = parseInt(sI.split(':')[0], 10) >= 22 || parseInt(sI.split(':')[0], 10) < 6;
-    if (notturnoStra) {
-      avvisi.push(`Straordinario ${sI}–${sF} in possibile fascia notturna: da verificare, non compilato automaticamente.`);
-      noteParti.push(`Straordinario programmato ${sI}–${sF} (da verificare fascia)`);
-    } else {
-      stra.diurno = ore;
-      noteParti.push(`Straordinario programmato ${sI}–${sF}`);
-    }
-    resto = resto.replace(/STR\.?\s*PROG\.?\s*\d{1,2}[.:]?\d{0,2}\s*[-–]\s*\d{1,2}[.:]?\d{0,2}/i, ' ');
-  }
-
-  // ── OP = ordine pubblico ──
-  if (/\bOP\b/.test(restoUp)) {
-    const dopoOp = resto.replace(/.*\bOP\b/i, '').trim();
-    sede = dopoOp.replace(/[()]/g, '').trim();
+  // ── OP / O.P. = ordine pubblico ──
+  if (/\bO\.?\s*P\.?\b/.test(restoUp)) {
+    // Tutto ciò che segue OP/O.P. è la località/evento
+    const dopoOp = resto.replace(/.*\bO\.?\s*P\.?\b/i, '').trim();
+    sede = dopoOp.replace(/[()]/g, '').replace(/^[.\s]+/, '').trim();
     if (sede) noteParti.push('OP ' + sede);
-    // Distinzione sede/fuori sede in base alla località
-    if (sede && sede.toLowerCase().includes(SEDE_ORDINARIA)) {
+    // Distinzione sede/fuori sede: Bologna = sede, altra città = fuori sede
+    const sedeLow = sede.toLowerCase();
+    if (sedeLow.includes(SEDE_ORDINARIA)) {
       flags.opSede = true;
     } else if (sede && /[A-Za-zÀ-ÿ]{3,}/.test(sede)) {
-      // C'è una località ma non è chiaramente Bologna → proposta prudente
-      flags.opSede = true;
-      avvisi.push(`OP "${sede}": proposto OP sede, ma verifica se è fuori sede.`);
+      // Località diversa da Bologna → proponi OP fuori sede 1 turno
+      flags.opFuori1 = true;
+      avvisi.push(`OP "${sede}": proposto OP fuori sede 1 turno (città diversa da Bologna), da verificare.`);
     } else {
       flags.opSede = true;
       avvisi.push('OP da verificare: scegli sede o fuori sede.');
     }
-    resto = resto.replace(/\bOP\b.*/i, ' ');
+    resto = resto.replace(/\bO\.?\s*P\.?\b.*/i, ' ');
   }
 
   // ── Altre sigle ──
@@ -2974,8 +3276,14 @@ function creaBozza(data, corpo, corpoUp) {
     avvisi.push('Domenica: flag Festivo proposto, da confermare.');
   }
 
-  // Quel che resta del testo, se significativo, va nelle note
-  const restoPulito = resto.replace(/[()]/g, '').trim();
+  // Quel che resta del testo, se significativo, va nelle note.
+  // Rimuovo punti isolati e token già gestiti come "ambigui" (numeri
+  // sciolti, lettere singole), così non finiscono due volte nelle note.
+  let restoPulito = resto.replace(/[().]/g, ' ')
+    .split(/\s+/)
+    .filter(t => t && !(/^\d+$/.test(t)) && !(t.length <= 2 && /^[A-Za-z]+$/.test(t)))
+    .join(' ')
+    .trim();
   if (restoPulito && restoPulito.length > 1 && !sede) {
     noteParti.push(restoPulito);
   }
