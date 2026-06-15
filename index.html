@@ -231,6 +231,48 @@
       gap: 5px;
       margin: 5px 0 3px;
     }
+    /* Badge informativi letti dalle note (att.fis, str.prog) */
+    .info-nota {
+      display: inline-block;
+      font-size: 0.74rem;
+      font-weight: 600;
+      padding: 2px 9px;
+      border-radius: 12px;
+      margin: 3px 4px 0 0;
+    }
+    .info-attfis  { background: #ECFDF5; color: #047857; border: 1px solid #A7F3D0; }
+    .info-strprog { background: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
+
+    /* Elenco turni nella tab Mese */
+    .mese-turno {
+      padding: 9px 0;
+      border-bottom: 1px solid #F4F7FA;
+      cursor: pointer;
+    }
+    .mese-turno:last-child { border-bottom: none; }
+    .mese-turno:active { opacity: 0.7; }
+    .mese-turno-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+    .mese-turno-data {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #1C2B3A;
+    }
+    .mese-turno-fascia {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+      color: #fff;
+    }
+    .mese-turno-ore {
+      font-size: 0.82rem;
+      color: #475569;
+    }
     .mini-flag {
       font-size: 0.7rem;
       font-weight: 600;
@@ -997,6 +1039,18 @@
       padding: 12px 0 4px;
     }
 
+    /* Guida OCR nella tab Import */
+    .ocr-guida {
+      background: #F0F9FF;
+      border: 1px solid #BAE6FD;
+      border-radius: 9px;
+      padding: 10px 12px;
+      font-size: 0.8rem;
+      color: #0C4A6E;
+      line-height: 1.5;
+      margin-bottom: 14px;
+    }
+
     /* ── TOAST ────────────────────────────────────────── */
     #toast {
       position: fixed;
@@ -1218,6 +1272,13 @@
       <strong>tutte come "Previsto"</strong>: potrai correggerle prima di salvare.
       Nulla viene salvato senza la tua conferma.
     </p>
+
+    <div class="ocr-guida">
+      📷 <strong>Settimanale in foto o screenshot?</strong>
+      Usa <strong>Google Lens</strong> (Android) o <strong>Foto / Testo attivo</strong> (iPhone)
+      per copiare il testo dall'immagine, poi incollalo qui sotto.
+      L'app analizzerà il testo solo dopo che premi <strong>Analizza</strong>.
+    </div>
 
     <div class="campo">
       <label>Data del lunedì di quella settimana</label>
@@ -1487,6 +1548,36 @@ function formattaMinuti(min) {
   const h = Math.floor(min / 60);
   const m = min % 60;
   return m === 0 ? `${h}h` : `${h}h ${m}min`;
+}
+
+// ─────────────────────────────────────────────────────────
+//  HELPER: riconosce nelle note "Attività fisica …" e
+//  "Straordinario programmato …" e restituisce mini-badge.
+//  Puramente visivo: legge le note, non tocca i dati.
+//  Restituisce un array di stringhe HTML già pronte.
+// ─────────────────────────────────────────────────────────
+function estraiInfoNote(note, turno) {
+  if (!note) return [];
+  const badge = [];
+
+  // Attività fisica: "Attività fisica 06:48–08:48" (orario opzionale)
+  const mAtt = note.match(/Attività fisica\s*([\d:]{4,5}\s*[–-]\s*[\d:]{4,5})?/i);
+  if (mAtt) {
+    const orario = mAtt[1] ? ' ' + mAtt[1].replace(/-/g, '–') : '';
+    badge.push(`<span class="info-nota info-attfis">🏃 Att. fis.${esc(orario)}</span>`);
+  }
+
+  // Straordinario programmato: "Straordinario programmato 14:30–17:30"
+  const mStr = note.match(/Straordinario programmato\s*([\d:]{4,5}\s*[–-]\s*[\d:]{4,5})?/i);
+  if (mStr) {
+    const orario = mStr[1] ? ' ' + mStr[1].replace(/-/g, '–') : '';
+    // Se il turno ha le ore di straordinario diurno valorizzate, le mostro
+    const ore = turno && turno.stra && turno.stra.diurno
+      ? ` · ${String(turno.stra.diurno).replace('.', ',')}h` : '';
+    badge.push(`<span class="info-nota info-strprog">⏱ STR prog.${esc(orario)}${ore}</span>`);
+  }
+
+  return badge;
 }
 
 // Aggiorna il testo della durata mentre si compila il form
@@ -1797,6 +1888,10 @@ function renderLista() {
       : '';
     const statoTurnoRiga = badgeStatoTurno ? `<div class="turno-flags">${badgeStatoTurno}</div>` : '';
 
+    // Badge informativi letti dalle note (Attività fisica, STR prog.)
+    const infoNote = t.stato ? [] : estraiInfoNote(t.note, t);
+    const infoNoteRiga = infoNote.length ? `<div>${infoNote.join('')}</div>` : '';
+
     return `
       <div class="turno-item" style="border-left-color:${colore}">
         <div class="turno-top">
@@ -1804,6 +1899,7 @@ function renderLista() {
           <div class="badge" style="background:${colore}">${esc(t.tipo)}</div>
         </div>
         ${rigaOre}
+        ${infoNoteRiga}
         ${statoTurnoRiga}
         ${flagsRiga}
         ${sedeHtml}
@@ -1959,17 +2055,13 @@ function renderRiepilogo() {
     .sort(([,a], [,b]) => b.n - a.n)
     .map(([fascia, d]) => {
       const colore = COLORI[fascia] || '#94A3B8';
-      const ore    = (d.min / 60).toFixed(1);
       return `
         <div class="riepilogo-riga">
           <div class="riga-sinistra">
             <div class="pallino" style="background:${colore}"></div>
             <span>${esc(fascia)}</span>
           </div>
-          <div class="riga-destra">
-            ${d.n} turni
-            <small>${ore}h totali</small>
-          </div>
+          <div class="riga-destra">${d.n} turni</div>
         </div>`;
     }).join('');
 
@@ -2069,6 +2161,30 @@ function renderRiepilogo() {
 
   const [anno, mm] = mese.split('-');
 
+  // ── Elenco compatto dei turni effettuati, con orario e badge ──
+  // Mostra Att. fisica e STR prog. letti dalle note, vicino all'orario.
+  const righeTurni = r.turni
+    .slice()
+    .sort((a, b) => (a.data + (a.inizio || '')).localeCompare(b.data + (b.inizio || '')))
+    .map(t => {
+      const colore = COLORI[t.tipo] || '#94A3B8';
+      const badgeInfo = estraiInfoNote(t.note, t).join('');
+      const infoRiga = badgeInfo ? `<div style="margin-top:2px">${badgeInfo}</div>` : '';
+      return `
+        <div class="mese-turno" onclick="modificaTurno('${t.id}')">
+          <div class="mese-turno-top">
+            <span class="mese-turno-data">${formattaData(t.data)}</span>
+            <span class="mese-turno-fascia" style="background:${colore}">${esc(t.tipo)}</span>
+          </div>
+          <div class="mese-turno-ore">🕐 ${t.inizio}–${t.fine}</div>
+          ${infoRiga}
+        </div>`;
+    }).join('');
+
+  const sezioneTurni = righeTurni ? `
+    <div class="riepilogo-sottotitolo">Turni effettuati</div>
+    ${righeTurni}` : '';
+
   // Le sezioni dei turni lavorati hanno senso solo se ce ne sono
   const sezioniLavoro = numTurni > 0 ? `
       <div class="riepilogo-sottotitolo">Fasce orarie</div>
@@ -2081,11 +2197,8 @@ function renderRiepilogo() {
   el.innerHTML = `
     <div class="card">
       <div class="card-titolo">📊 ${nomeMese(parseInt(mm))} ${anno}</div>
-      <div class="riepilogo-grande">
-        <div class="numero-grande">${totOre}<span style="font-size:1.4rem">h</span></div>
-        <div class="numero-grande-label">ore effettuate · ${numTurni} turni effettuati</div>
-      </div>
       ${sezioniLavoro}
+      ${sezioneTurni}
       ${sezioneProg}
       ${sezioneNonLav}
     </div>`;
@@ -2521,6 +2634,9 @@ function renderCalendario() {
       // straordinario: badge ⏱ se almeno un campo ore è valorizzato
       const haStra = t.stra && (t.stra.diurno || t.stra.nottFest || t.stra.speciale);
       const badgeStra = haStra ? '<span class="cal-badge">⏱</span>' : '';
+      // attività fisica: badge 🏃 se presente nelle note (solo visivo)
+      const haAttFis = t.note && /Attività fisica/i.test(t.note);
+      const badgeAttFis = haAttFis ? '<span class="cal-badge">🏃</span>' : '';
 
       // Stato turno (default Effettuato per i turni esistenti)
       const et = t.statoTurno || 'Effettuato';
@@ -2538,7 +2654,7 @@ function renderCalendario() {
           <div class="cal-turno-fascia">${esc(t.tipo)}</div>
           <div class="cal-turno-ore">${t.inizio}-${t.fine}</div>
           ${tagStato}
-          <div class="cal-badge-riga">${badges}${badgeStra}</div>
+          <div class="cal-badge-riga">${badges}${badgeStra}${badgeAttFis}</div>
         </div>`;
     });
     if (turni.length > 2) {
