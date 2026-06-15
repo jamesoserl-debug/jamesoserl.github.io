@@ -51,17 +51,23 @@
       position: sticky;
       top: 58px;
       z-index: 100;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
     }
+    .tabbar::-webkit-scrollbar { display: none; }
     .tabbar button {
-      flex: 1;
-      padding: 11px 4px;
+      flex: 1 0 auto;
+      min-width: 64px;
+      padding: 11px 8px;
       background: none;
       border: none;
       border-bottom: 3px solid transparent;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       font-weight: 600;
       color: #8695A6;
       cursor: pointer;
+      white-space: nowrap;
       transition: color 0.15s, border-color 0.15s;
     }
     .tabbar button.active {
@@ -887,6 +893,110 @@
       opacity: 0.85;
     }
 
+    /* ── IMPORT BOZZE ────────────────────────────────── */
+    .bozza {
+      background: #fff;
+      border-radius: 12px;
+      padding: 13px;
+      margin-bottom: 10px;
+      border-left: 4px solid #2563EB;
+    }
+    .bozza.da-verificare { border-left-color: #D97706; background: #FFFBEB; }
+    .bozza.esclusa { opacity: 0.5; }
+    .bozza.duplicato { border-left-color: #DC2626; }
+    .bozza-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .bozza-giorno {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #1C2B3A;
+    }
+    .bozza-tag {
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 20px;
+      color: #fff;
+    }
+    .bozza-tag.t-previsto { background: #2563EB; }
+    .bozza-tag.t-rs       { background: #94A3B8; }
+    .bozza-tag.t-assente  { background: #D97706; }
+    .bozza-avviso {
+      font-size: 0.76rem;
+      color: #92400E;
+      background: #FEF3C7;
+      border-radius: 6px;
+      padding: 6px 9px;
+      margin-bottom: 8px;
+    }
+    .bozza-campo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .bozza-campo label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #6B7E91;
+      width: 72px;
+      flex-shrink: 0;
+    }
+    .bozza-campo input, .bozza-campo select {
+      flex: 1;
+      padding: 7px 9px;
+      background: #F4F7FA;
+      border: 1.5px solid #DDE3EC;
+      border-radius: 7px;
+      font-size: 0.85rem;
+      color: #1C2B3A;
+    }
+    .bozza-flags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 8px 0;
+    }
+    .bozza-flag {
+      display: inline-flex;
+      align-items: center;
+    }
+    .bozza-flag input { position: absolute; opacity: 0; width: 0; }
+    .bozza-flag span {
+      padding: 5px 9px;
+      background: #F4F7FA;
+      border: 1.5px solid #DDE3EC;
+      border-radius: 16px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: #64748B;
+    }
+    .bozza-flag input:checked + span {
+      background: #1C2B3A; border-color: #1C2B3A; color: #fff;
+    }
+    .bozza-stra { display: flex; gap: 6px; }
+    .bozza-stra input { width: 60px; text-align: center; }
+    .bozza-escludi {
+      font-size: 0.76rem;
+      color: #DC2626;
+      font-weight: 600;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 4px 0;
+    }
+    .import-azioni {
+      position: sticky;
+      bottom: 0;
+      background: #EEF2F7;
+      padding: 12px 0 4px;
+    }
+
     /* ── TOAST ────────────────────────────────────────── */
     #toast {
       position: fixed;
@@ -933,6 +1043,7 @@
   <button id="tab-lista"                         onclick="apriTab('lista')">📋 Lista</button>
   <button id="tab-riepilogo"                     onclick="apriTab('riepilogo')">📊 Mese</button>
   <button id="tab-calendario"                    onclick="apriTab('calendario')">📅 Cal.</button>
+  <button id="tab-import"                         onclick="apriTab('import')">📥 Import</button>
   <button id="tab-controlli"                      onclick="apriTab('controlli')">🔍 Check</button>
   <button id="tab-impostazioni"                  onclick="apriTab('impostazioni')">⚙️ Importi</button>
 </div>
@@ -1094,6 +1205,40 @@
   <div id="contenuto-calendario">
     <!-- Griglia generata dinamicamente -->
   </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SEZIONE — IMPORT SETTIMANALE (da testo incollato)
+═══════════════════════════════════════════════════════ -->
+<div id="sezione-import" class="sezione">
+  <div class="card">
+    <div class="card-titolo">📥 Import settimanale</div>
+    <p class="imp-nota">
+      Incolla il testo del settimanale. L'app proporrà delle bozze
+      <strong>tutte come "Previsto"</strong>: potrai correggerle prima di salvare.
+      Nulla viene salvato senza la tua conferma.
+    </p>
+
+    <div class="campo">
+      <label>Data del lunedì di quella settimana</label>
+      <input type="date" id="import-lunedi">
+    </div>
+
+    <div class="campo">
+      <label>Testo del settimanale</label>
+      <textarea id="import-testo" style="height:160px;font-family:monospace;font-size:0.85rem" placeholder="LUN: RS
+MAR: 06.48 - 14 (ATT. FIS 6.48 - 8.48)
+MER: 12.48 - 20.00 PQ
+GIO: 06.48 - 14 OP REPUBBLICA DELLE IDEE
+VEN: 06.48 - 14.00 (STR. PROG. 14.30 - 17.30)
+SAB: 06.48 - 14.00
+DOM: RS"></textarea>
+    </div>
+
+    <button class="btn btn-primary" onclick="analizzaSettimanale()">🔍 Analizza testo</button>
+  </div>
+
+  <div id="import-bozze"><!-- bozze generate dinamicamente --></div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════
@@ -2489,6 +2634,413 @@ function chiudiSceltaGiorno(event) {
   // Se chiamata dal click sullo sfondo, chiude. Se chiamata da un
   // pulsante interno (senza event), chiude comunque.
   document.getElementById('cal-scelta-overlay').classList.remove('visibile');
+}
+
+// ─────────────────────────────────────────────────────────
+//  IMPORT SETTIMANALE — parser da testo incollato
+//  Produce BOZZE (mai salvataggi diretti). Ogni turno nasce
+//  come statoTurno = 'Previsto'. Le ambiguità sono marcate
+//  "da verificare": il parser propone, l'utente conferma.
+// ─────────────────────────────────────────────────────────
+
+const SEDE_ORDINARIA = 'bologna';  // riferimento per OP sede/fuori sede
+
+// Mappa giorno settimanale → offset rispetto al lunedì (0=lun..6=dom)
+const GIORNI_MAP = {
+  'LUN': 0, 'MAR': 1, 'MER': 2, 'GIO': 3, 'VEN': 4, 'SAB': 5, 'DOM': 6,
+  'LUNEDI': 0, 'MARTEDI': 1, 'MERCOLEDI': 2, 'GIOVEDI': 3, 'VENERDI': 4, 'SABATO': 5, 'DOMENICA': 6
+};
+
+// Bozze correnti in memoria (non ancora salvate)
+let BOZZE = [];
+
+// Normalizza un orario: "6.48"→"06:48", "14"→"14:00"
+function normOrario(s) {
+  s = s.trim().replace('.', ':');
+  let [h, m] = s.split(':');
+  h = h.padStart(2, '0');
+  m = (m || '00').padStart(2, '0');
+  return h + ':' + m;
+}
+
+// Estrae il primo intervallo orario "HH.MM - HH.MM" da una stringa.
+// Restituisce {inizio, fine, resto} dove resto è la riga senza quell'intervallo.
+function estraiOrario(testo) {
+  const re = /(\d{1,2}(?:[.:]\d{2})?)\s*[-–]\s*(\d{1,2}(?:[.:]\d{2})?)/;
+  const m = testo.match(re);
+  if (!m) return null;
+  return {
+    inizio: normOrario(m[1]),
+    fine:   normOrario(m[2]),
+    resto:  testo.replace(m[0], ' ').replace(/\s+/g, ' ').trim()
+  };
+}
+
+// Deduce la fascia dall'orario di inizio/fine
+function deduciFascia(inizio, fine) {
+  if (!inizio) return 'Altro';
+  const attraversa = fine && fine <= inizio;
+  const h = parseInt(inizio.split(':')[0], 10);
+  if (attraversa || h >= 19) return 'Notte';
+  if (h < 12) return 'Mattina';
+  if (h < 17) return 'Pomeriggio';
+  return 'Pomeriggio';
+}
+
+// Calcola le ore tra due orari (per lo straordinario), formato decimale
+function oreTra(inizio, fine) {
+  const [hI, mI] = inizio.split(':').map(Number);
+  let [hF, mF] = fine.split(':').map(Number);
+  let min = (hF * 60 + mF) - (hI * 60 + mI);
+  if (min < 0) min += 1440;
+  return Math.round((min / 60) * 100) / 100;
+}
+
+// Data ISO dato il lunedì + offset giorni
+function dataDaLunedi(lunediIso, offset) {
+  const d = new Date(lunediIso + 'T12:00:00');
+  d.setDate(d.getDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
+// ── PARSER PRINCIPALE ──
+function analizzaSettimanale() {
+  const lunedi = document.getElementById('import-lunedi').value;
+  const testo  = document.getElementById('import-testo').value;
+
+  if (!lunedi) { alert('Indica la data del lunedì di quella settimana.'); return; }
+  if (!testo.trim()) { alert('Incolla il testo del settimanale.'); return; }
+
+  BOZZE = [];
+  const righe = testo.split('\n').map(r => r.trim()).filter(r => r);
+
+  righe.forEach(riga => {
+    // Identifica il giorno iniziale (es. "LUN:" o "LUN")
+    const mGiorno = riga.match(/^([A-Za-zÀ-ÿ]+)\s*[:\-.)]?\s*(.*)$/);
+    if (!mGiorno) return;
+    const sigla = mGiorno[1].toUpperCase().replace(/[^A-Z]/g, '');
+    if (!(sigla in GIORNI_MAP)) return;  // riga che non inizia con un giorno
+
+    const offset = GIORNI_MAP[sigla];
+    const data   = dataDaLunedi(lunedi, offset);
+    let corpo    = mGiorno[2].trim();
+    const corpoUp = corpo.toUpperCase();
+
+    const bozza = creaBozza(data, corpo, corpoUp);
+    BOZZE.push(bozza);
+  });
+
+  if (BOZZE.length === 0) {
+    document.getElementById('import-bozze').innerHTML =
+      '<div class="card"><div class="vuoto">Nessuna riga riconosciuta. Controlla il formato (ogni riga deve iniziare con LUN, MAR, ...).</div></div>';
+    return;
+  }
+
+  renderBozze();
+}
+
+// Crea una bozza interpretando il corpo di una riga
+function creaBozza(data, corpo, corpoUp) {
+  const avvisi = [];
+
+  // ── Stato giornata: RS ──
+  if (/\b(RS|RIPOSO)\b/.test(corpoUp)) {
+    return { data, stato: 'RS', tipo: 'RS', inizio: '', fine: '',
+             flags: {}, stra: { diurno: 0, nottFest: 0, speciale: 0 },
+             note: '', sede: '', avvisi: [], escludi: false };
+  }
+
+  // ── Stato giornata: Assente ──
+  const motiviAssenza = ['ASSENTE', 'FERIE', 'MALATTIA', 'PERMESSO', 'CONGEDO', 'RECUPERO'];
+  const motivo = motiviAssenza.find(m => corpoUp.includes(m));
+  if (motivo) {
+    return { data, stato: 'Assente', tipo: 'Assente', inizio: '', fine: '',
+             flags: {}, stra: { diurno: 0, nottFest: 0, speciale: 0 },
+             note: motivo.charAt(0) + motivo.slice(1).toLowerCase(), sede: '',
+             avvisi: [], escludi: false };
+  }
+
+  // ── Turno lavorato: estrai orario principale ──
+  const orarioMain = estraiOrario(corpo);
+  if (!orarioMain) {
+    // Riga senza orario riconoscibile e non RS/Assente
+    return { data, stato: '', tipo: 'Altro', inizio: '', fine: '',
+             flags: {}, stra: { diurno: 0, nottFest: 0, speciale: 0 },
+             note: corpo, sede: '',
+             avvisi: ['Orario non riconosciuto: da compilare manualmente.'],
+             escludi: false };
+  }
+
+  const flags = { festivo:false, nottIdx:false, opSede:false, opFuori1:false,
+                  opFuoriIntera:false, missione:false, reperibilita:false,
+                  serviziEsterni:false, ordigni:false, formazione:false };
+  const stra = { diurno: 0, nottFest: 0, speciale: 0 };
+  const noteParti = [];
+  let sede = '';
+  let resto = orarioMain.resto;
+  let restoUp = resto.toUpperCase();
+
+  const fascia = deduciFascia(orarioMain.inizio, orarioMain.fine);
+
+  // Notte → proposta indennità notturna (da confermare)
+  if (fascia === 'Notte') {
+    flags.nottIdx = true;
+    avvisi.push('Turno notturno: indennità servizio notturno proposta, da confermare.');
+  }
+
+  // ── PQ = Reperibilità ──
+  if (/\bPQ\b/.test(restoUp)) {
+    flags.reperibilita = true;
+    resto = resto.replace(/\bPQ\b/i, ' ');
+  }
+
+  // ── ATT. FIS = attività fisica (solo nota, niente ore) ──
+  const mAtt = restoUp.match(/ATT\.?\s*FIS\.?\s*(\d{1,2}(?:[.:]\d{2})?\s*[-–]\s*\d{1,2}(?:[.:]\d{2})?)?/);
+  if (mAtt) {
+    let orarioAtt = '';
+    if (mAtt[1]) {
+      const oa = estraiOrario(mAtt[1]);
+      if (oa) orarioAtt = ` ${oa.inizio}–${oa.fine}`;
+    }
+    noteParti.push('Attività fisica' + orarioAtt);
+    // rimuovi il blocco att.fis. dal resto
+    resto = resto.replace(/ATT\.?\s*FIS\.?\s*\d{0,2}[.:]?\d{0,2}\s*[-–]?\s*\d{0,2}[.:]?\d{0,2}/i, ' ');
+  }
+
+  // ── STR. PROG. = straordinario programmato ──
+  const mStr = restoUp.match(/STR\.?\s*PROG\.?\s*(\d{1,2}(?:[.:]\d{2})?)\s*[-–]\s*(\d{1,2}(?:[.:]\d{2})?)/);
+  if (mStr) {
+    const sI = normOrario(mStr[1]);
+    const sF = normOrario(mStr[2]);
+    const ore = oreTra(sI, sF);
+    const notturnoStra = parseInt(sI.split(':')[0], 10) >= 22 || parseInt(sI.split(':')[0], 10) < 6;
+    if (notturnoStra) {
+      avvisi.push(`Straordinario ${sI}–${sF} in possibile fascia notturna: da verificare, non compilato automaticamente.`);
+      noteParti.push(`Straordinario programmato ${sI}–${sF} (da verificare fascia)`);
+    } else {
+      stra.diurno = ore;
+      noteParti.push(`Straordinario programmato ${sI}–${sF}`);
+    }
+    resto = resto.replace(/STR\.?\s*PROG\.?\s*\d{1,2}[.:]?\d{0,2}\s*[-–]\s*\d{1,2}[.:]?\d{0,2}/i, ' ');
+  }
+
+  // ── OP = ordine pubblico ──
+  if (/\bOP\b/.test(restoUp)) {
+    const dopoOp = resto.replace(/.*\bOP\b/i, '').trim();
+    sede = dopoOp.replace(/[()]/g, '').trim();
+    if (sede) noteParti.push('OP ' + sede);
+    // Distinzione sede/fuori sede in base alla località
+    if (sede && sede.toLowerCase().includes(SEDE_ORDINARIA)) {
+      flags.opSede = true;
+    } else if (sede && /[A-Za-zÀ-ÿ]{3,}/.test(sede)) {
+      // C'è una località ma non è chiaramente Bologna → proposta prudente
+      flags.opSede = true;
+      avvisi.push(`OP "${sede}": proposto OP sede, ma verifica se è fuori sede.`);
+    } else {
+      flags.opSede = true;
+      avvisi.push('OP da verificare: scegli sede o fuori sede.');
+    }
+    resto = resto.replace(/\bOP\b.*/i, ' ');
+  }
+
+  // ── Altre sigle ──
+  if (/\b(AGG\.?|AGGIORNAMENTO|FORMAZIONE)\b/.test(restoUp)) { flags.formazione = true; resto = resto.replace(/\b(AGG\.?|AGGIORNAMENTO|FORMAZIONE)\b/i,' '); }
+  if (/\bPOLIGONO\b/.test(restoUp)) { noteParti.push('Poligono'); avvisi.push('Poligono: classificare come Formazione o nota, da confermare.'); resto = resto.replace(/\bPOLIGONO\b/i,' '); }
+  if (/\bMISSIONE\b/.test(restoUp)) { flags.missione = true; resto = resto.replace(/\bMISSIONE\b/i,' '); }
+  if (/\b(SERV\.?\s*EST\.?|SERVIZIO\s*ESTERNO)\b/.test(restoUp)) { flags.serviziEsterni = true; resto = resto.replace(/\b(SERV\.?\s*EST\.?|SERVIZIO\s*ESTERNO)\b/i,' '); }
+  if (/\b(FEST\.?|FESTIVO)\b/.test(restoUp)) { flags.festivo = true; resto = resto.replace(/\b(FEST\.?|FESTIVO)\b/i,' '); }
+  if (/\bNOTTE\b/.test(restoUp)) { flags.nottIdx = true; if (deduciFascia(orarioMain.inizio, orarioMain.fine) !== 'Notte') avvisi.push('Indicato NOTTE: verifica fascia e indennità.'); resto = resto.replace(/\bNOTTE\b/i,' '); }
+
+  // Festivo automatico se domenica
+  const dow = new Date(data + 'T12:00:00').getDay();
+  if (dow === 0 && !flags.festivo) {
+    flags.festivo = true;
+    avvisi.push('Domenica: flag Festivo proposto, da confermare.');
+  }
+
+  // Quel che resta del testo, se significativo, va nelle note
+  const restoPulito = resto.replace(/[()]/g, '').trim();
+  if (restoPulito && restoPulito.length > 1 && !sede) {
+    noteParti.push(restoPulito);
+  }
+
+  return {
+    data, stato: '', tipo: fascia,
+    inizio: orarioMain.inizio, fine: orarioMain.fine,
+    flags, stra, sede,
+    note: noteParti.join(' · '),
+    avvisi, escludi: false
+  };
+}
+
+// ── RENDER delle bozze editabili ──
+function renderBozze() {
+  const el = document.getElementById('import-bozze');
+  const turniEsistenti = caricaTurni();
+
+  let html = '';
+  BOZZE.forEach((b, i) => {
+    // Controllo duplicati: turno già presente nella stessa data
+    const giaPresente = turniEsistenti.filter(t => t.data === b.data);
+    const giaEffettuato = giaPresente.some(t => !t.stato && (t.statoTurno || 'Effettuato') === 'Effettuato');
+    let classe = 'bozza';
+    if (b.avvisi.length > 0) classe += ' da-verificare';
+    if (giaPresente.length > 0) classe += ' duplicato';
+    if (b.escludi) classe += ' esclusa';
+
+    const gg = formattaData(b.data);
+
+    // ── RS / Assente: bozza compatta ──
+    if (b.stato) {
+      html += `
+        <div class="${classe}" id="bozza-${i}">
+          <div class="bozza-top">
+            <div class="bozza-giorno">${gg}</div>
+            <span class="bozza-tag t-${b.stato === 'RS' ? 'rs' : 'assente'}">${b.stato}</span>
+          </div>
+          ${giaPresente.length > 0 ? `<div class="bozza-avviso">⚠️ Esiste già un record il ${gg}. Di default questa riga è esclusa.</div>` : ''}
+          ${b.note ? `<div class="bozza-campo"><label>Note</label><input type="text" id="bz-note-${i}" value="${esc(b.note)}"></div>` : ''}
+          <button class="bozza-escludi" onclick="toggleEscludi(${i})">${b.escludi ? '↩️ Reincludi' : '✕ Escludi questa riga'}</button>
+        </div>`;
+      return;
+    }
+
+    // ── Turno lavorato: bozza completa editabile ──
+    const avvisiHtml = b.avvisi.map(a => `<div class="bozza-avviso">⚠️ ${esc(a)}</div>`).join('');
+    const dupHtml = giaPresente.length > 0
+      ? `<div class="bozza-avviso" style="background:#FEE2E2;color:#991B1B">⚠️ ${giaEffettuato ? 'C\'è già un turno EFFETTUATO' : 'C\'è già un turno'} il ${gg}: probabile doppione, escluso di default.</div>`
+      : '';
+
+    const fasceOpt = ['Mattina','Pomeriggio','Notte','Giornata','Altro']
+      .map(f => `<option value="${f}"${b.tipo===f?' selected':''}>${f}</option>`).join('');
+
+    html += `
+      <div class="${classe}" id="bozza-${i}">
+        <div class="bozza-top">
+          <div class="bozza-giorno">${gg}</div>
+          <span class="bozza-tag t-previsto">Previsto</span>
+        </div>
+        ${dupHtml}
+        ${avvisiHtml}
+        <div class="bozza-campo"><label>Inizio</label><input type="time" id="bz-inizio-${i}" value="${b.inizio}"></div>
+        <div class="bozza-campo"><label>Fine</label><input type="time" id="bz-fine-${i}" value="${b.fine}"></div>
+        <div class="bozza-campo"><label>Fascia</label><select id="bz-tipo-${i}">${fasceOpt}</select></div>
+        <div class="bozza-flags">
+          ${flagBozzaChip(i,'festivo','🎉 Festivo',b.flags.festivo)}
+          ${flagBozzaChip(i,'nottIdx','🌙 Ind. nott.',b.flags.nottIdx)}
+          ${flagBozzaChip(i,'opSede','🛡 OP sede',b.flags.opSede)}
+          ${flagBozzaChip(i,'opFuori1','🚌 OP fuori 1t',b.flags.opFuori1)}
+          ${flagBozzaChip(i,'opFuoriIntera','🚍 OP fuori int.',b.flags.opFuoriIntera)}
+          ${flagBozzaChip(i,'missione','✈️ Missione',b.flags.missione)}
+          ${flagBozzaChip(i,'reperibilita','📞 Reperib.',b.flags.reperibilita)}
+          ${flagBozzaChip(i,'serviziEsterni','🚶 Serv. est.',b.flags.serviziEsterni)}
+          ${flagBozzaChip(i,'formazione','📚 Formaz.',b.flags.formazione)}
+        </div>
+        <div class="bozza-campo">
+          <label>Stra. (h)</label>
+          <div class="bozza-stra">
+            <input type="text" inputmode="decimal" id="bz-strad-${i}" value="${b.stra.diurno||''}" placeholder="diur.">
+            <input type="text" inputmode="decimal" id="bz-stranf-${i}" value="${b.stra.nottFest||''}" placeholder="n/f">
+            <input type="text" inputmode="decimal" id="bz-strasp-${i}" value="${b.stra.speciale||''}" placeholder="spec.">
+          </div>
+        </div>
+        <div class="bozza-campo"><label>Sede</label><input type="text" id="bz-sede-${i}" value="${esc(b.sede)}"></div>
+        <div class="bozza-campo"><label>Note</label><input type="text" id="bz-note-${i}" value="${esc(b.note)}"></div>
+        <button class="bozza-escludi" onclick="toggleEscludi(${i})">${b.escludi ? '↩️ Reincludi' : '✕ Escludi questa riga'}</button>
+      </div>`;
+  });
+
+  // Conta quante bozze verranno salvate (escluse i duplicati esclusi e le escluse manuali)
+  html += `
+    <div class="import-azioni">
+      <button class="btn btn-primary" onclick="salvaBozze()">💾 Salva i previsti selezionati</button>
+      <button class="btn btn-backup" style="margin-top:8px" onclick="annullaImport()">✕ Annulla import</button>
+    </div>`;
+
+  el.innerHTML = html;
+
+  // Pre-escludi automaticamente le bozze in conflitto con un turno esistente
+  BOZZE.forEach((b, i) => {
+    if (!b._dupChecked) {
+      const dup = turniEsistenti.some(t => t.data === b.data);
+      if (dup) b.escludi = true;
+      b._dupChecked = true;
+    }
+  });
+}
+
+function flagBozzaChip(i, chiave, label, attivo) {
+  return `<label class="bozza-flag"><input type="checkbox" id="bz-f-${chiave}-${i}"${attivo?' checked':''}><span>${label}</span></label>`;
+}
+
+function toggleEscludi(i) {
+  BOZZE[i].escludi = !BOZZE[i].escludi;
+  // Salva i valori correnti dei campi prima di ridisegnare
+  leggiBozzeDaUI();
+  renderBozze();
+}
+
+// Legge i valori modificati dall'utente nei campi e li riporta in BOZZE
+function leggiBozzeDaUI() {
+  BOZZE.forEach((b, i) => {
+    const gv = id => { const e = document.getElementById(id); return e ? e.value : null; };
+    const gc = id => { const e = document.getElementById(id); return e ? e.checked : false; };
+    if (b.stato) {
+      const n = gv('bz-note-' + i); if (n !== null) b.note = n;
+      return;
+    }
+    const inizio = gv('bz-inizio-' + i); if (inizio !== null) b.inizio = inizio;
+    const fine   = gv('bz-fine-' + i);   if (fine !== null)   b.fine = fine;
+    const tipo   = gv('bz-tipo-' + i);   if (tipo !== null)   b.tipo = tipo;
+    ['festivo','nottIdx','opSede','opFuori1','opFuoriIntera','missione','reperibilita','serviziEsterni','formazione'].forEach(k => {
+      if (document.getElementById('bz-f-' + k + '-' + i)) b.flags[k] = gc('bz-f-' + k + '-' + i);
+    });
+    const sd = gv('bz-strad-' + i);  if (sd !== null)  b.stra.diurno   = leggiNumero(sd);
+    const sn = gv('bz-stranf-' + i); if (sn !== null)  b.stra.nottFest = leggiNumero(sn);
+    const ss = gv('bz-strasp-' + i); if (ss !== null)  b.stra.speciale = leggiNumero(ss);
+    const sede = gv('bz-sede-' + i); if (sede !== null) b.sede = sede;
+    const note = gv('bz-note-' + i); if (note !== null) b.note = note;
+  });
+}
+
+// ── SALVATAGGIO delle bozze (come Previsti) ──
+function salvaBozze() {
+  leggiBozzeDaUI();
+  const daSalvare = BOZZE.filter(b => !b.escludi);
+  if (daSalvare.length === 0) { alert('Nessuna bozza selezionata da salvare.'); return; }
+
+  if (!confirm(`Salvare ${daSalvare.length} record? I turni lavorati nasceranno come "Previsto".`)) return;
+
+  const turni = caricaTurni();
+  daSalvare.forEach(b => {
+    const durata = b.stato ? 0 : calcolaMinuti(b.inizio, b.fine);
+    turni.push({
+      id: (Date.now() + Math.random()).toString(36),
+      data: b.data,
+      inizio: b.inizio, fine: b.fine,
+      tipo: b.tipo,
+      sede: b.sede || '',
+      note: b.note || '',
+      durata,
+      flags: b.stato ? {} : b.flags,
+      stra: b.stra,
+      stato: b.stato || '',
+      statoTurno: b.stato ? '' : 'Previsto'
+    });
+  });
+  salvaTurniStorage(turni);
+
+  BOZZE = [];
+  document.getElementById('import-bozze').innerHTML =
+    `<div class="card"><div class="ctrl-ok"><div class="ctrl-ok-icona">✅</div>${daSalvare.length} record salvati come previsti.<br><span style="font-size:0.8rem;font-weight:400;color:#94A3B8">Trovi tutto in Lista e Calendario.</span></div></div>`;
+  document.getElementById('import-testo').value = '';
+  toast('✅ Import completato');
+}
+
+function annullaImport() {
+  BOZZE = [];
+  document.getElementById('import-bozze').innerHTML = '';
+  toast('Import annullato');
 }
 
 // ─────────────────────────────────────────────────────────
