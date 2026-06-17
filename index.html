@@ -3667,23 +3667,24 @@ function testoPdfSafe(testo) {
 }
 const CHIAVE_ANAGRAFICA = 'moduli_anagrafica';
 
-// Coordinate calibrate (spazio overlay, copia alta, testo ruotato -90).
-// pdf-lib usa origine in basso-sx come reportlab: coordinate trasferibili.
+// Coordinate calibrate sul template VERTICALE e dritto (Modulo_106.pdf).
+// Pagina 578x824, rotazione 0: si scrive con coordinate X/Y normali
+// (origine basso-sx, Y verso l'alto), nessuna rotazione del testo.
 const COORDS_106 = {
-  conducente:      [478, 455],
-  ordineDi:        [455, 448],
-  targa:           [455, 370],
-  motivoServizio:  [430, 455],
-  numero:          [498, 500],
-  uscita_ora:      [580, 365],
-  uscita_km:       [562, 365],
-  rientro_ora:     [580, 305],
-  rientro_km:      [562, 305],
-  percorso_km:     [500, 280],
-  itinerario:      [495, 338],
-  guasti:          [240, 300],
-  data:            [448, 165],
-  conducente_firma:[420, 165]
+  numero:          [205, 658],
+  conducente:      [135, 645],
+  ordineDi:        [120, 622],
+  targa:           [135, 597],
+  motivoServizio:  [170, 575],
+  uscita_ora:      [110, 520],
+  uscita_km:       [150, 505],
+  rientro_ora:     [275, 520],
+  rientro_km:      [320, 505],
+  percorso_km:     [420, 505],
+  itinerario:      [155, 422],
+  guasti:          [360, 318],
+  data:            [115, 258],
+  conducente_firma:[90, 210]
 };
 
 function caricaModuli() {
@@ -4168,8 +4169,8 @@ async function generaPdf106() {
 
     const ox = m.offset.x, oy = m.offset.y;
 
-    // Scrive un testo ruotato -90° alle coordinate calibrate.
-    // Ogni testo passa da testoPdfSafe per evitare errori di encoding.
+    // Scrive un testo alle coordinate calibrate (template dritto, niente
+    // rotazione). Ogni testo passa da testoPdfSafe per evitare errori encoding.
     function scrivi(campo, testo) {
       const safe = testoPdfSafe(testo);
       if (!safe) return;  // campo vuoto: non scrive nulla, nessun errore
@@ -4180,7 +4181,6 @@ async function generaPdf106() {
         y: c[1] + oy,
         size: 8,
         font,
-        rotate: PDFLib.degrees(-90),
         color: PDFLib.rgb(0, 0, 0.05)
       });
     }
