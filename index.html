@@ -1178,6 +1178,68 @@
     }
     .itin-opt.attivo { background: #1C2B3A; border-color: #1C2B3A; color: #fff; }
 
+    /* Anagrafica mezzi/ordini Mod.106 */
+    .ana-mezzo-riga {
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 9px;
+      padding: 10px;
+      margin-bottom: 8px;
+    }
+    .ana-mezzo-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .ana-mezzo-riga input, .ana-mezzo-riga select {
+      width: 100%;
+      padding: 7px 9px;
+      border: 1.5px solid #DDE3EC;
+      border-radius: 7px;
+      font-size: 0.85rem;
+      margin-bottom: 5px;
+      background: #fff;
+    }
+    .ana-mezzo-row2 {
+      display: flex;
+      gap: 6px;
+    }
+    .ana-mezzo-row2 select { flex: 1; }
+    .ana-mezzo-row2 input { flex: 1; }
+    .ana-ordine-riga {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 6px;
+    }
+    .ana-ordine-riga input {
+      flex: 1;
+      padding: 7px 9px;
+      border: 1.5px solid #DDE3EC;
+      border-radius: 7px;
+      font-size: 0.85rem;
+    }
+    .ana-radio {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.74rem;
+      color: #475569;
+      white-space: nowrap;
+    }
+    .ana-del {
+      background: #FEE2E2;
+      color: #DC2626;
+      border: none;
+      border-radius: 6px;
+      width: 28px;
+      height: 28px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
     /* ── TOAST ────────────────────────────────────────── */
     #toast {
       position: fixed;
@@ -2583,7 +2645,9 @@ function esportaBackup() {
     turni:      caricaTurni(),
     importi:    caricaImporti(),           // include anche radiazioniAttiva
                                            // e artificieriAttiva
-    controlli:  caricaControlli()          // soglie, on/off e avvisi ignorati
+    controlli:  caricaControlli(),         // soglie, on/off e avvisi ignorati
+    moduli:     caricaModuli(),            // bozze Mod. 106
+    anagrafica: caricaAnagrafica()         // dati fissi Mod. 106
   };
 
   // Crea il file e fa partire il download
@@ -2654,6 +2718,13 @@ function importaBackup(event) {
     // Le impostazioni controlli sono opzionali: i backup vecchi non le hanno
     if (backup.controlli && typeof backup.controlli === 'object') {
       salvaControlliStorage(backup.controlli);
+    }
+    // Moduli 106 e anagrafica (opzionali: i backup vecchi non li hanno)
+    if (Array.isArray(backup.moduli)) {
+      salvaModuliStorage(backup.moduli);
+    }
+    if (backup.anagrafica && typeof backup.anagrafica === 'object') {
+      salvaAnagraficaStorage(backup.anagrafica);
     }
 
     // Aggiorna tutte le schermate con i nuovi dati
@@ -3569,6 +3640,31 @@ function annullaImport() {
 // ═════════════════════════════════════════════════════════
 
 const CHIAVE_MODULI = 'moduli_106';
+
+// Normalizza il testo per il PDF: pdf-lib con Helvetica standard supporta
+// solo WinAnsi/ASCII. Questa funzione sostituisce i caratteri non sicuri
+// (frecce, trattini tipografici, virgolette curve) e rimuove emoji e
+// simboli non stampabili. Va applicata a OGNI testo scritto nel PDF.
+function testoPdfSafe(testo) {
+  if (testo == null) return '';
+  let s = String(testo);
+  // Sostituzioni mirate (uso codici \u per evitare corruzione in editor)
+  const mappa = {
+    '\u2192': '-', '\u2190': '-', '\u2194': '-', '\u27F6': '-', '\u21D2': '-', // frecce
+    '\u2013': '-', '\u2014': '-', '\u2015': '-', '\u2212': '-',                 // trattini lunghi / meno
+    '\u201C': '"', '\u201D': '"', '\u201E': '"', '\u201F': '"',                 // virgolette doppie curve
+    '\u00AB': '"', '\u00BB': '"',                                               // « »
+    '\u2018': "'", '\u2019': "'", '\u201A': "'", '\u201B': "'",                 // virgolette singole curve
+    '\u2026': '...', '\u2022': '-', '\u00B7': '-', '\u2219': '-',               // ellissi, bullet
+    '\u00A0': ' '                                                               // spazio insecabile
+  };
+  s = s.replace(/[\u2192\u2190\u2194\u27F6\u21D2\u2013\u2014\u2015\u2212\u201C\u201D\u201E\u201F\u00AB\u00BB\u2018\u2019\u201A\u201B\u2026\u2022\u00B7\u2219\u00A0]/g,
+    ch => mappa[ch] || '-');
+  // Rimuove emoji e simboli fuori dal range stampabile WinAnsi (Latin-1).
+  // Tiene lettere accentate (À-ÿ), punteggiatura e simboli base ASCII.
+  s = s.replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '');
+  return s;
+}
 const CHIAVE_ANAGRAFICA = 'moduli_anagrafica';
 
 // Coordinate calibrate (spazio overlay, copia alta, testo ruotato -90).
@@ -3598,16 +3694,36 @@ function salvaModuliStorage(lista) {
   localStorage.setItem(CHIAVE_MODULI, JSON.stringify(lista));
 }
 function caricaAnagrafica() {
+  const base = {
+    conducente: '', ordineDi: '', ufficio: '',
+    partenza: 'Aeroporto di Bologna',
+    mezzo: '', targa: '',           // legacy: vecchio mezzo singolo
+    destinazioni: [],
+    mezzi: [],                       // [{nome, tipo, targa, note}]
+    mezzoDefault: -1,                // indice del mezzo predefinito
+    ordiniDi: [],                    // valori "per ordine di" ricorrenti
+    ordineDefault: -1                // indice del "per ordine di" predefinito
+  };
+  let a;
   try {
-    return Object.assign({
-      conducente: '', ordineDi: '', ufficio: '',
-      partenza: 'Aeroporto di Bologna',
-      mezzo: '', targa: '',
-      destinazioni: []
-    }, JSON.parse(localStorage.getItem(CHIAVE_ANAGRAFICA)) || {});
+    a = Object.assign(base, JSON.parse(localStorage.getItem(CHIAVE_ANAGRAFICA)) || {});
   } catch (e) {
-    return { conducente:'', ordineDi:'', ufficio:'', partenza:'Aeroporto di Bologna', mezzo:'', targa:'', destinazioni:[] };
+    a = base;
   }
+  // Migrazione dolce: se esisteva un mezzo singolo legacy e la lista è
+  // vuota, lo porto nella nuova lista mezzi senza perdere dati.
+  if ((!a.mezzi || a.mezzi.length === 0) && (a.mezzo || a.targa)) {
+    a.mezzi = [{ nome: a.mezzo || 'Mezzo', tipo: 'Autovettura', targa: a.targa || '', note: '' }];
+    if (a.mezzoDefault == null || a.mezzoDefault < 0) a.mezzoDefault = 0;
+  }
+  // Se esisteva un ordineDi singolo e la lista è vuota, lo porto nella lista
+  if ((!a.ordiniDi || a.ordiniDi.length === 0) && a.ordineDi) {
+    a.ordiniDi = [a.ordineDi];
+    if (a.ordineDefault == null || a.ordineDefault < 0) a.ordineDefault = 0;
+  }
+  if (!Array.isArray(a.mezzi)) a.mezzi = [];
+  if (!Array.isArray(a.ordiniDi)) a.ordiniDi = [];
+  return a;
 }
 function salvaAnagraficaStorage(a) {
   localStorage.setItem(CHIAVE_ANAGRAFICA, JSON.stringify(a));
@@ -3640,15 +3756,29 @@ function nuovoModulo(turnoId) {
     }
   }
 
+  // Mezzo predefinito dalla lista mezzi (se impostato)
+  let mezzoNome = ana.mezzo || 'Autovettura', mezzoTarga = ana.targa || '', mezzoTipo = 'Autovettura';
+  if (ana.mezzi && ana.mezzi.length && ana.mezzoDefault >= 0 && ana.mezzi[ana.mezzoDefault]) {
+    const md = ana.mezzi[ana.mezzoDefault];
+    mezzoNome = md.nome || mezzoNome;
+    mezzoTarga = md.targa || '';
+    mezzoTipo = md.tipo || 'Autovettura';
+  }
+  // "Per ordine di" predefinito dalla lista (se impostato)
+  let ordineDiVal = ana.ordineDi || '';
+  if (ana.ordiniDi && ana.ordiniDi.length && ana.ordineDefault >= 0 && ana.ordiniDi[ana.ordineDefault]) {
+    ordineDiVal = ana.ordiniDi[ana.ordineDefault];
+  }
+
   MODULO_CORRENTE = {
     id: 'm' + Date.now().toString(36),
     turnoId: turnoId || null,
     stato: 'Aperto',
     numero: '',
     conducente: ana.conducente,
-    ordineDi: ana.ordineDi,
-    targa: ana.targa,
-    mezzo: ana.mezzo || 'Autovettura',
+    ordineDi: ordineDiVal,
+    targa: mezzoTarga,
+    mezzo: mezzoTipo,
     motivo: motivo,
     partenza: ana.partenza || 'Aeroporto di Bologna',
     uscita: { ora: oraOra, km: '' },
@@ -3704,6 +3834,18 @@ function leggiEditorModulo() {
   MODULO_CORRENTE.rapporto.comunicazioni = g('mod-comunicazioni');
 }
 
+// Applica un mezzo salvato (per indice) ai campi targa e tipo mezzo
+function applicaMezzoSalvato(idx) {
+  if (idx === '') return;
+  const ana = caricaAnagrafica();
+  const mz = ana.mezzi && ana.mezzi[parseInt(idx, 10)];
+  if (!mz) return;
+  const targaEl = document.getElementById('mod-targa');
+  const mezzoEl = document.getElementById('mod-mezzo');
+  if (targaEl) targaEl.value = mz.targa || '';
+  if (mezzoEl && mz.tipo) mezzoEl.value = mz.tipo;
+}
+
 // ── RENDER della lista moduli ──
 function renderModuli() {
   document.getElementById('moduli-vista-lista').style.display = '';
@@ -3749,6 +3891,24 @@ function renderEditorModulo() {
   const mezzi = ['Autovettura','Autocarro','Motoveicolo','Natante']
     .map(x => `<option value="${x}"${m.mezzo===x?' selected':''}>${x}</option>`).join('');
 
+  // Selettore rapido dei mezzi salvati in anagrafica
+  const ana = caricaAnagrafica();
+  const selMezzi = (ana.mezzi && ana.mezzi.length)
+    ? `<div class="campo"><label>Scegli mezzo salvato</label>
+        <select id="mod-sel-mezzo" onchange="applicaMezzoSalvato(this.value)">
+          <option value="">— seleziona —</option>
+          ${ana.mezzi.map((mz, i) => `<option value="${i}">${esc(mz.nome)} · ${esc(mz.targa)} (${esc(mz.tipo)})</option>`).join('')}
+        </select></div>`
+    : '';
+  // Selettore rapido dei "per ordine di" salvati
+  const selOrdini = (ana.ordiniDi && ana.ordiniDi.length)
+    ? `<div class="campo"><label>Scegli "per ordine di"</label>
+        <select id="mod-sel-ordine" onchange="if(this.value!==''){document.getElementById('mod-ordinedi').value=this.value}">
+          <option value="">— seleziona —</option>
+          ${ana.ordiniDi.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}
+        </select></div>`
+    : '';
+
   el.innerHTML = `
     <div class="card">
       <button class="btn btn-backup" onclick="leggiEditorModulo();salvaModuloCorrente();renderModuli()">← Torna alla lista</button>
@@ -3759,7 +3919,9 @@ function renderEditorModulo() {
       <div class="wizard-step-titolo">1 · Apertura</div>
       <div class="campo"><label>N. progressivo</label><input type="text" id="mod-numero" value="${esc(m.numero)}"></div>
       <div class="campo"><label>Conducente</label><input type="text" id="mod-conducente" value="${esc(m.conducente)}"></div>
+      ${selOrdini}
       <div class="campo"><label>Per ordine di</label><input type="text" id="mod-ordinedi" value="${esc(m.ordineDi)}"></div>
+      ${selMezzi}
       <div class="campo"><label>Targa</label><input type="text" id="mod-targa" value="${esc(m.targa)}"></div>
       <div class="campo"><label>Mezzo</label><select id="mod-mezzo">${mezzi}</select></div>
       <div class="campo"><label>Motivo del servizio</label><input type="text" id="mod-motivo" value="${esc(m.motivo)}"></div>
@@ -4006,12 +4168,14 @@ async function generaPdf106() {
 
     const ox = m.offset.x, oy = m.offset.y;
 
-    // Scrive un testo ruotato -90° alle coordinate calibrate
+    // Scrive un testo ruotato -90° alle coordinate calibrate.
+    // Ogni testo passa da testoPdfSafe per evitare errori di encoding.
     function scrivi(campo, testo) {
-      if (!testo) return;
+      const safe = testoPdfSafe(testo);
+      if (!safe) return;  // campo vuoto: non scrive nulla, nessun errore
       const c = COORDS_106[campo];
       if (!c) return;
-      page.drawText(String(testo), {
+      page.drawText(safe, {
         x: c[0] + ox,
         y: c[1] + oy,
         size: 8,
@@ -4062,33 +4226,142 @@ function apriAnagrafica106() {
   const el = document.getElementById('moduli-anagrafica');
   el.style.display = '';
   const a = caricaAnagrafica();
+
+  // Righe dei mezzi salvati
+  const tipiMezzo = ['Autovettura','Autocarro','Motoveicolo','Natante'];
+  const righeMezzi = (a.mezzi || []).map((mz, i) => `
+    <div class="ana-mezzo-riga">
+      <div class="ana-mezzo-top">
+        <label class="ana-radio">
+          <input type="radio" name="mezzo-default" ${a.mezzoDefault === i ? 'checked' : ''} onchange="setMezzoDefault(${i})">
+          <span>Predefinito</span>
+        </label>
+        <button class="ana-del" onclick="eliminaMezzo(${i})">✕</button>
+      </div>
+      <input type="text" id="ana-mz-nome-${i}" value="${esc(mz.nome||'')}" placeholder="Nome/descrizione (es. Fiat Panda)">
+      <div class="ana-mezzo-row2">
+        <select id="ana-mz-tipo-${i}">${tipiMezzo.map(t => `<option value="${t}"${mz.tipo===t?' selected':''}>${t}</option>`).join('')}</select>
+        <input type="text" id="ana-mz-targa-${i}" value="${esc(mz.targa||'')}" placeholder="Targa">
+      </div>
+      <input type="text" id="ana-mz-note-${i}" value="${esc(mz.note||'')}" placeholder="Note (opzionale)">
+    </div>`).join('');
+
+  // Righe dei "per ordine di"
+  const righeOrdini = (a.ordiniDi || []).map((o, i) => `
+    <div class="ana-ordine-riga">
+      <label class="ana-radio">
+        <input type="radio" name="ordine-default" ${a.ordineDefault === i ? 'checked' : ''} onchange="setOrdineDefault(${i})">
+        <span>Predef.</span>
+      </label>
+      <input type="text" id="ana-ord-${i}" value="${esc(o)}" placeholder="Es. Questore di Bologna">
+      <button class="ana-del" onclick="eliminaOrdine(${i})">✕</button>
+    </div>`).join('');
+
   el.innerHTML = `
     <div class="card">
       <button class="btn btn-backup" onclick="renderModuli()">← Torna alla lista</button>
       <div class="card-titolo" style="margin-top:10px">⚙️ Anagrafica Mod. 106</div>
-      <p class="imp-nota">Dati fissi precompilati nei nuovi moduli. Restano solo sul telefono.</p>
-      <div class="campo"><label>Conducente abituale</label><input type="text" id="ana-conducente" value="${esc(a.conducente)}"></div>
-      <div class="campo"><label>Per ordine di</label><input type="text" id="ana-ordinedi" value="${esc(a.ordineDi)}"></div>
+      <p class="imp-nota">Dati fissi precompilati nei nuovi moduli. Restano solo sul telefono e nel backup.</p>
+
+      <div class="ctrl-sezione-titolo">Dati personali</div>
+      <div class="campo"><label>Conducente abituale (il tuo nome)</label><input type="text" id="ana-conducente" value="${esc(a.conducente)}"></div>
       <div class="campo"><label>Ufficio / reparto</label><input type="text" id="ana-ufficio" value="${esc(a.ufficio)}"></div>
-      <div class="campo"><label>Sede partenza/rientro</label><input type="text" id="ana-partenza" value="${esc(a.partenza)}"></div>
-      <div class="campo"><label>Mezzo ricorrente</label><input type="text" id="ana-mezzo" value="${esc(a.mezzo)}"></div>
-      <div class="campo"><label>Targa ricorrente</label><input type="text" id="ana-targa" value="${esc(a.targa)}"></div>
-      <div class="campo"><label>Destinazioni ricorrenti (una per riga)</label><textarea id="ana-dest" style="height:80px">${esc((a.destinazioni||[]).join('\n'))}</textarea></div>
-      <button class="btn btn-primary" onclick="salvaAnagrafica106()">💾 Salva anagrafica</button>
+      <div class="campo"><label>Sede partenza/rientro predefinita</label><input type="text" id="ana-partenza" value="${esc(a.partenza)}"></div>
+
+      <div class="ctrl-sezione-titolo">Mezzi ricorrenti</div>
+      <div id="ana-mezzi-lista">${righeMezzi || '<p class="imp-nota">Nessun mezzo salvato.</p>'}</div>
+      <button class="btn btn-backup" onclick="aggiungiMezzoAna()">➕ Aggiungi mezzo</button>
+
+      <div class="ctrl-sezione-titolo">"Per ordine di" ricorrenti</div>
+      <div id="ana-ordini-lista">${righeOrdini || '<p class="imp-nota">Nessun valore salvato.</p>'}</div>
+      <button class="btn btn-backup" onclick="aggiungiOrdineAna()">➕ Aggiungi "per ordine di"</button>
+
+      <div class="ctrl-sezione-titolo">Destinazioni ricorrenti</div>
+      <div class="campo"><textarea id="ana-dest" style="height:80px" placeholder="Una destinazione per riga">${esc((a.destinazioni||[]).join('\n'))}</textarea></div>
+
+      <button class="btn btn-primary" style="margin-top:14px" onclick="salvaAnagrafica106()">💾 Salva anagrafica</button>
     </div>`;
 }
 
+// Legge i campi anagrafica correnti dalla UI in un oggetto
+function leggiAnagraficaUI() {
+  const g = id => { const e = document.getElementById(id); return e ? e.value : ''; };
+  const a = caricaAnagrafica();
+  a.conducente = g('ana-conducente');
+  a.ufficio = g('ana-ufficio');
+  a.partenza = g('ana-partenza') || 'Aeroporto di Bologna';
+  a.destinazioni = g('ana-dest').split('\n').map(s => s.trim()).filter(s => s);
+  // Mezzi
+  const mezzi = [];
+  (a.mezzi || []).forEach((_, i) => {
+    if (document.getElementById('ana-mz-nome-' + i)) {
+      mezzi.push({
+        nome: g('ana-mz-nome-' + i),
+        tipo: g('ana-mz-tipo-' + i) || 'Autovettura',
+        targa: g('ana-mz-targa-' + i),
+        note: g('ana-mz-note-' + i)
+      });
+    }
+  });
+  a.mezzi = mezzi;
+  // Ordini
+  const ordini = [];
+  (a.ordiniDi || []).forEach((_, i) => {
+    if (document.getElementById('ana-ord-' + i)) {
+      const v = g('ana-ord-' + i).trim();
+      if (v) ordini.push(v);
+    }
+  });
+  a.ordiniDi = ordini;
+  // Coerenza indici predefiniti
+  if (a.mezzoDefault >= a.mezzi.length) a.mezzoDefault = a.mezzi.length ? 0 : -1;
+  if (a.ordineDefault >= a.ordiniDi.length) a.ordineDefault = a.ordiniDi.length ? 0 : -1;
+  return a;
+}
+
+function aggiungiMezzoAna() {
+  const a = leggiAnagraficaUI();
+  a.mezzi.push({ nome: '', tipo: 'Autovettura', targa: '', note: '' });
+  if (a.mezzoDefault < 0) a.mezzoDefault = 0;
+  salvaAnagraficaStorage(a);
+  apriAnagrafica106();
+}
+function eliminaMezzo(i) {
+  const a = leggiAnagraficaUI();
+  a.mezzi.splice(i, 1);
+  if (a.mezzoDefault === i) a.mezzoDefault = a.mezzi.length ? 0 : -1;
+  else if (a.mezzoDefault > i) a.mezzoDefault--;
+  salvaAnagraficaStorage(a);
+  apriAnagrafica106();
+}
+function setMezzoDefault(i) {
+  const a = leggiAnagraficaUI();
+  a.mezzoDefault = i;
+  salvaAnagraficaStorage(a);
+}
+function aggiungiOrdineAna() {
+  const a = leggiAnagraficaUI();
+  a.ordiniDi.push('');
+  if (a.ordineDefault < 0) a.ordineDefault = 0;
+  salvaAnagraficaStorage(a);
+  apriAnagrafica106();
+}
+function eliminaOrdine(i) {
+  const a = leggiAnagraficaUI();
+  a.ordiniDi.splice(i, 1);
+  if (a.ordineDefault === i) a.ordineDefault = a.ordiniDi.length ? 0 : -1;
+  else if (a.ordineDefault > i) a.ordineDefault--;
+  salvaAnagraficaStorage(a);
+  apriAnagrafica106();
+}
+function setOrdineDefault(i) {
+  const a = leggiAnagraficaUI();
+  a.ordineDefault = i;
+  salvaAnagraficaStorage(a);
+}
+
 function salvaAnagrafica106() {
-  const g = id => document.getElementById(id).value;
-  const a = {
-    conducente: g('ana-conducente'),
-    ordineDi: g('ana-ordinedi'),
-    ufficio: g('ana-ufficio'),
-    partenza: g('ana-partenza') || 'Aeroporto di Bologna',
-    mezzo: g('ana-mezzo'),
-    targa: g('ana-targa'),
-    destinazioni: g('ana-dest').split('\n').map(s => s.trim()).filter(s => s)
-  };
+  const a = leggiAnagraficaUI();
   salvaAnagraficaStorage(a);
   toast('✅ Anagrafica salvata');
   renderModuli();
