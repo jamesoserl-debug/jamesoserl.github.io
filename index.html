@@ -3667,25 +3667,31 @@ function testoPdfSafe(testo) {
 }
 const CHIAVE_ANAGRAFICA = 'moduli_anagrafica';
 
-// Coordinate calibrate sul template VERTICALE e dritto (Modulo_106.pdf).
-// Pagina 578x824, rotazione 0: si scrive con coordinate X/Y normali
-// (origine basso-sx, Y verso l'alto), nessuna rotazione del testo.
+// Coordinate calibrate sul template (578x824) confrontate con un Mod.106
+// reale compilato. Sistema: origine basso-sx, Y verso l'alto. Lo scaling
+// B5-in-A4 viene applicato in fase di generazione, queste restano coord
+// native del template.
 const COORDS_106 = {
-  numero:          [205, 658],
-  conducente:      [135, 645],
-  ordineDi:        [120, 622],
-  targa:           [135, 597],
-  motivoServizio:  [170, 575],
-  uscita_ora:      [110, 520],
-  uscita_km:       [150, 505],
-  rientro_ora:     [275, 520],
-  rientro_km:      [320, 505],
-  percorso_km:     [420, 505],
-  itinerario:      [155, 422],
-  guasti:          [360, 318],
-  data:            [115, 258],
-  conducente_firma:[90, 210]
+  ufficio:         [180, 712],
+  numero:          [195, 656],
+  conducente:      [175, 638],
+  ordineDi:        [165, 620],
+  modello:         [130, 606],
+  targa:           [345, 608],
+  motivoServizio:  [180, 600],
+  uscita_ora:      [155, 535],
+  uscita_km:       [160, 518],
+  rientro_ora:     [295, 535],
+  rientro_km:      [305, 518],
+  percorso_km:     [495, 520],
+  itinerario:      [200, 422],
+  guasti:          [430, 360],
+  data:            [140, 290],
+  conducente_firma:[110, 250]
 };
+// Posizioni della "X" sul tipo mezzo (riquadro a destra della testata)
+const MEZZO_X_106 = 375;
+const MEZZO_Y_106 = { 'Autovettura': 638, 'Autocarro': 626, 'Motoveicolo': 614, 'Natante': 602 };
 
 function caricaModuli() {
   try { return JSON.parse(localStorage.getItem(CHIAVE_MODULI)) || []; }
@@ -3758,12 +3764,13 @@ function nuovoModulo(turnoId) {
   }
 
   // Mezzo predefinito dalla lista mezzi (se impostato)
-  let mezzoNome = ana.mezzo || 'Autovettura', mezzoTarga = ana.targa || '', mezzoTipo = 'Autovettura';
+  let mezzoNome = ana.mezzo || 'Autovettura', mezzoTarga = ana.targa || '', mezzoTipo = 'Autovettura', mezzoModello = '';
   if (ana.mezzi && ana.mezzi.length && ana.mezzoDefault >= 0 && ana.mezzi[ana.mezzoDefault]) {
     const md = ana.mezzi[ana.mezzoDefault];
     mezzoNome = md.nome || mezzoNome;
     mezzoTarga = md.targa || '';
     mezzoTipo = md.tipo || 'Autovettura';
+    mezzoModello = md.modello || '';
   }
   // "Per ordine di" predefinito dalla lista (se impostato)
   let ordineDiVal = ana.ordineDi || '';
@@ -3776,9 +3783,11 @@ function nuovoModulo(turnoId) {
     turnoId: turnoId || null,
     stato: 'Aperto',
     numero: '',
+    ufficio: ana.ufficio || '',
     conducente: ana.conducente,
     ordineDi: ordineDiVal,
     targa: mezzoTarga,
+    modello: mezzoModello,
     mezzo: mezzoTipo,
     motivo: motivo,
     partenza: ana.partenza || 'Aeroporto di Bologna',
@@ -3821,8 +3830,10 @@ function leggiEditorModulo() {
   if (!MODULO_CORRENTE) return;
   const g = id => { const e = document.getElementById(id); return e ? e.value : ''; };
   MODULO_CORRENTE.numero = g('mod-numero');
+  MODULO_CORRENTE.ufficio = g('mod-ufficio');
   MODULO_CORRENTE.conducente = g('mod-conducente');
   MODULO_CORRENTE.ordineDi = g('mod-ordinedi');
+  MODULO_CORRENTE.modello = g('mod-modello');
   MODULO_CORRENTE.targa = g('mod-targa');
   MODULO_CORRENTE.mezzo = g('mod-mezzo');
   MODULO_CORRENTE.motivo = g('mod-motivo');
@@ -3843,8 +3854,10 @@ function applicaMezzoSalvato(idx) {
   if (!mz) return;
   const targaEl = document.getElementById('mod-targa');
   const mezzoEl = document.getElementById('mod-mezzo');
+  const modelloEl = document.getElementById('mod-modello');
   if (targaEl) targaEl.value = mz.targa || '';
   if (mezzoEl && mz.tipo) mezzoEl.value = mz.tipo;
+  if (modelloEl) modelloEl.value = mz.modello || '';
 }
 
 // ── RENDER della lista moduli ──
@@ -3918,13 +3931,15 @@ function renderEditorModulo() {
 
     <div class="wizard-step">
       <div class="wizard-step-titolo">1 · Apertura</div>
+      <div class="campo"><label>Ufficio / reparto</label><input type="text" id="mod-ufficio" value="${esc(m.ufficio||'')}"></div>
       <div class="campo"><label>N. progressivo</label><input type="text" id="mod-numero" value="${esc(m.numero)}"></div>
       <div class="campo"><label>Conducente</label><input type="text" id="mod-conducente" value="${esc(m.conducente)}"></div>
       ${selOrdini}
       <div class="campo"><label>Per ordine di</label><input type="text" id="mod-ordinedi" value="${esc(m.ordineDi)}"></div>
       ${selMezzi}
+      <div class="campo"><label>Modello mezzo</label><input type="text" id="mod-modello" value="${esc(m.modello||'')}"></div>
       <div class="campo"><label>Targa</label><input type="text" id="mod-targa" value="${esc(m.targa)}"></div>
-      <div class="campo"><label>Mezzo</label><select id="mod-mezzo">${mezzi}</select></div>
+      <div class="campo"><label>Tipo mezzo</label><select id="mod-mezzo">${mezzi}</select></div>
       <div class="campo"><label>Motivo del servizio</label><input type="text" id="mod-motivo" value="${esc(m.motivo)}"></div>
       <div class="campo"><label>Partenza</label><input type="text" id="mod-partenza" value="${esc(m.partenza)}"></div>
       <div class="campo"><label>Ora uscita</label><input type="time" id="mod-uscita-ora" value="${m.uscita.ora}"></div>
@@ -4163,31 +4178,32 @@ async function generaPdf106() {
     if (!resp.ok) throw new Error('template non trovato');
     const bytes = await resp.arrayBuffer();
 
-    const pdfDoc = await PDFLib.PDFDocument.load(bytes);
-    const page = pdfDoc.getPages()[0];
-    const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+    const tplDoc = await PDFLib.PDFDocument.load(bytes);
+    const font = await tplDoc.embedFont(PDFLib.StandardFonts.Helvetica);
 
+    // ── 1. Scrivo i campi sulla pagina 1 del template (coord native) ──
+    const tplPage = tplDoc.getPages()[0];
     const ox = m.offset.x, oy = m.offset.y;
 
-    // Scrive un testo alle coordinate calibrate (template dritto, niente
-    // rotazione). Ogni testo passa da testoPdfSafe per evitare errori encoding.
-    function scrivi(campo, testo) {
+    function scrivi(campo, testo, opt) {
       const safe = testoPdfSafe(testo);
-      if (!safe) return;  // campo vuoto: non scrive nulla, nessun errore
+      if (!safe) return;
       const c = COORDS_106[campo];
       if (!c) return;
-      page.drawText(safe, {
+      tplPage.drawText(safe, {
         x: c[0] + ox,
         y: c[1] + oy,
-        size: 8,
+        size: (opt && opt.size) || 8,
         font,
         color: PDFLib.rgb(0, 0, 0.05)
       });
     }
 
+    scrivi('ufficio', m.ufficio);
     scrivi('numero', m.numero);
     scrivi('conducente', m.conducente);
     scrivi('ordineDi', m.ordineDi);
+    scrivi('modello', m.modello);
     scrivi('targa', m.targa);
     scrivi('motivoServizio', m.motivo);
     scrivi('uscita_ora', m.uscita.ora);
@@ -4200,7 +4216,59 @@ async function generaPdf106() {
     scrivi('data', formattaData(dataModulo(m)));
     scrivi('conducente_firma', m.conducente);
 
-    const pdfBytes = await pdfDoc.save();
+    // X sul tipo mezzo
+    const myMezzo = MEZZO_Y_106[m.mezzo];
+    if (myMezzo) {
+      tplPage.drawText('X', {
+        x: MEZZO_X_106 + ox, y: myMezzo + oy,
+        size: 9, font, color: PDFLib.rgb(0, 0, 0.05)
+      });
+    }
+
+    // ── 2. Costruisco il PDF A4 finale ──
+    // Strategia robusta per pdf-lib 1.17.1:
+    //  - outDoc nuovo documento A4
+    //  - embedPage della pagina 1 del template (con i campi già disegnati):
+    //    embedPage cattura il contenuto CORRENTE della pagina, comprese le
+    //    scritte appena aggiunte con drawText
+    //  - copyPages per la pagina 2 (istruzioni) a piena pagina
+    const A4_W = 595.28, A4_H = 841.89;
+    const TPL_W = tplPage.getWidth(), TPL_H = tplPage.getHeight();
+    const SCALA = Math.min(498.9 / TPL_W, 708.66 / TPL_H);  // dentro B5
+    const MARG = 28;
+    const posX = MARG;
+    const posY = A4_H - MARG - TPL_H * SCALA;
+
+    const outDoc = await PDFLib.PDFDocument.create();
+
+    // Incorporo la pagina 1 compilata (embedPage sullo stesso oggetto pagina)
+    const embedded = await outDoc.embedPage(tplPage);
+    const a4 = outDoc.addPage([A4_W, A4_H]);
+    a4.drawPage(embedded, { x: posX, y: posY, xScale: SCALA, yScale: SCALA });
+
+    // ── 3. Bordo tratteggiato di taglio attorno al B5 ──
+    const bw = TPL_W * SCALA, bh = TPL_H * SCALA;
+    a4.drawRectangle({
+      x: posX, y: posY, width: bw, height: bh,
+      borderColor: PDFLib.rgb(0.5, 0.5, 0.5),
+      borderWidth: 0.6, borderDashArray: [4, 3],
+      borderOpacity: 1
+    });
+    // Segni angolari (crocette agli angoli)
+    const L = 10;
+    const segni = [[posX, posY], [posX + bw, posY], [posX, posY + bh], [posX + bw, posY + bh]];
+    segni.forEach(([cx, cy]) => {
+      a4.drawLine({ start: { x: cx - L, y: cy }, end: { x: cx + L, y: cy }, thickness: 0.7, color: PDFLib.rgb(0.4,0.4,0.4) });
+      a4.drawLine({ start: { x: cx, y: cy - L }, end: { x: cx, y: cy + L }, thickness: 0.7, color: PDFLib.rgb(0.4,0.4,0.4) });
+    });
+
+    // ── 4. Pagina 2 (istruzioni) a piena pagina, copiata dal template ──
+    if (tplDoc.getPageCount() > 1) {
+      const [pag2] = await outDoc.copyPages(tplDoc, [1]);
+      outDoc.addPage(pag2);
+    }
+
+    const pdfBytes = await outDoc.save();
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -4238,7 +4306,8 @@ function apriAnagrafica106() {
         </label>
         <button class="ana-del" onclick="eliminaMezzo(${i})">✕</button>
       </div>
-      <input type="text" id="ana-mz-nome-${i}" value="${esc(mz.nome||'')}" placeholder="Nome/descrizione (es. Fiat Panda)">
+      <input type="text" id="ana-mz-nome-${i}" value="${esc(mz.nome||'')}" placeholder="Nome/descrizione (es. auto di servizio)">
+      <input type="text" id="ana-mz-modello-${i}" value="${esc(mz.modello||'')}" placeholder="Modello (es. Dacia Duster)">
       <div class="ana-mezzo-row2">
         <select id="ana-mz-tipo-${i}">${tipiMezzo.map(t => `<option value="${t}"${mz.tipo===t?' selected':''}>${t}</option>`).join('')}</select>
         <input type="text" id="ana-mz-targa-${i}" value="${esc(mz.targa||'')}" placeholder="Targa">
@@ -4297,6 +4366,7 @@ function leggiAnagraficaUI() {
     if (document.getElementById('ana-mz-nome-' + i)) {
       mezzi.push({
         nome: g('ana-mz-nome-' + i),
+        modello: g('ana-mz-modello-' + i),
         tipo: g('ana-mz-tipo-' + i) || 'Autovettura',
         targa: g('ana-mz-targa-' + i),
         note: g('ana-mz-note-' + i)
