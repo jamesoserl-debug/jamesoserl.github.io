@@ -3672,26 +3672,26 @@ const CHIAVE_ANAGRAFICA = 'moduli_anagrafica';
 // B5-in-A4 viene applicato in fase di generazione, queste restano coord
 // native del template.
 const COORDS_106 = {
-  ufficio:         [180, 712],
-  numero:          [195, 656],
-  conducente:      [175, 638],
-  ordineDi:        [165, 620],
-  modello:         [130, 606],
-  targa:           [345, 608],
-  motivoServizio:  [180, 600],
-  uscita_ora:      [155, 535],
-  uscita_km:       [160, 518],
-  rientro_ora:     [295, 535],
-  rientro_km:      [305, 518],
-  percorso_km:     [495, 520],
-  itinerario:      [200, 422],
+  ufficio:         [180, 709],
+  numero:          [205, 654],
+  conducente:      [170, 635],
+  ordineDi:        [160, 622],
+  modello:         [115, 604],
+  targa:           [275, 610],
+  motivoServizio:  [170, 594],
+  uscita_ora:      [120, 533],
+  uscita_km:       [140, 516],
+  rientro_ora:     [275, 533],
+  rientro_km:      [290, 516],
+  percorso_km:     [415, 519],
+  itinerario:      [145, 422],
   guasti:          [430, 360],
-  data:            [140, 290],
-  conducente_firma:[110, 250]
+  data:            [105, 252],
+  conducente_firma:[85, 212]
 };
 // Posizioni della "X" sul tipo mezzo (riquadro a destra della testata)
-const MEZZO_X_106 = 375;
-const MEZZO_Y_106 = { 'Autovettura': 638, 'Autocarro': 626, 'Motoveicolo': 614, 'Natante': 602 };
+const MEZZO_X_106 = 380;
+const MEZZO_Y_106 = { 'Autovettura': 635, 'Autocarro': 623, 'Motoveicolo': 611, 'Natante': 599 };
 
 function caricaModuli() {
   try { return JSON.parse(localStorage.getItem(CHIAVE_MODULI)) || []; }
