@@ -1240,6 +1240,83 @@
       flex-shrink: 0;
     }
 
+    /* Calibrazione campi PDF */
+    .cal-passo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 10px 0;
+      font-size: 0.85rem;
+      color: #475569;
+      flex-wrap: wrap;
+    }
+    .cal-passo-btn {
+      padding: 6px 12px;
+      border: 1.5px solid #DDE3EC;
+      border-radius: 7px;
+      background: #fff;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    .cal-passo-btn.attivo {
+      background: #2563EB;
+      color: #fff;
+      border-color: #2563EB;
+    }
+    .cal-lista {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .cal-riga {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 9px;
+      padding: 8px 10px;
+    }
+    .cal-nome {
+      font-size: 0.85rem;
+      color: #1E293B;
+      font-weight: 500;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .cal-valore {
+      font-size: 0.7rem;
+      color: #94A3B8;
+      font-weight: 400;
+      font-variant-numeric: tabular-nums;
+    }
+    .cal-frecce {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .cal-fr {
+      width: 34px;
+      height: 34px;
+      border: 1.5px solid #CBD5E1;
+      border-radius: 7px;
+      background: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+      color: #334155;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cal-fr:active {
+      background: #2563EB;
+      color: #fff;
+      border-color: #2563EB;
+    }
+
     /* ── TOAST ────────────────────────────────────────── */
     #toast {
       position: fixed;
@@ -2647,7 +2724,8 @@ function esportaBackup() {
                                            // e artificieriAttiva
     controlli:  caricaControlli(),         // soglie, on/off e avvisi ignorati
     moduli:     caricaModuli(),            // bozze Mod. 106
-    anagrafica: caricaAnagrafica()         // dati fissi Mod. 106
+    anagrafica: caricaAnagrafica(),        // dati fissi Mod. 106
+    coords106:  coordsEffettive()          // coordinate personalizzate calibrazione
   };
 
   // Crea il file e fa partire il download
@@ -2725,6 +2803,9 @@ function importaBackup(event) {
     }
     if (backup.anagrafica && typeof backup.anagrafica === 'object') {
       salvaAnagraficaStorage(backup.anagrafica);
+    }
+    if (backup.coords106 && typeof backup.coords106 === 'object') {
+      salvaCoordsPersonali(backup.coords106);
     }
 
     // Aggiorna tutte le schermate con i nuovi dati
@@ -3670,8 +3751,9 @@ const CHIAVE_ANAGRAFICA = 'moduli_anagrafica';
 // Coordinate calibrate sul template (578x824) confrontate con un Mod.106
 // reale compilato. Sistema: origine basso-sx, Y verso l'alto. Lo scaling
 // B5-in-A4 viene applicato in fase di generazione, queste restano coord
-// native del template.
-const COORDS_106 = {
+// native del template. Questi sono i valori PREDEFINITI: l'utente può
+// personalizzarli dalla modalità calibrazione (salvati a parte).
+const COORDS_106_DEFAULT = {
   ufficio:         [180, 713],
   numero:          [216, 655],
   conducente:      [166, 636],
@@ -3692,6 +3774,52 @@ const COORDS_106 = {
 // Posizioni della "X" sul tipo mezzo (riquadro a destra della testata)
 const MEZZO_X_106 = 387;
 const MEZZO_Y_106 = { 'Autovettura': 634, 'Autocarro': 622, 'Motoveicolo': 610, 'Natante': 598 };
+
+// Etichette leggibili dei campi per la schermata di calibrazione
+const CAMPI_106_ETICHETTE = {
+  ufficio:          'Ufficio / reparto',
+  numero:           'Numero (N.)',
+  conducente:       'Conducente',
+  ordineDi:         'Per ordine di',
+  modello:          'Modello mezzo',
+  targa:            'Targa',
+  motivoServizio:   'Motivo del servizio',
+  uscita_ora:       'Uscita - Ora',
+  uscita_km:        'Uscita - Km',
+  rientro_ora:      'Rientro - Ora',
+  rientro_km:       'Rientro - Km',
+  percorso_km:      'Percorso - Km',
+  itinerario:       'Itinerario',
+  guasti:           'Rapporto / guasti',
+  data:             'Data',
+  conducente_firma: 'Firma conducente'
+};
+
+const CHIAVE_COORDS = 'moduli_coords_106';
+
+// Legge le coordinate effettive: override personalizzati se presenti,
+// altrimenti i valori predefiniti. Restituisce sempre una mappa completa.
+function coordsEffettive() {
+  const c = {};
+  for (const k in COORDS_106_DEFAULT) c[k] = COORDS_106_DEFAULT[k].slice();
+  try {
+    const salv = JSON.parse(localStorage.getItem(CHIAVE_COORDS));
+    if (salv && typeof salv === 'object') {
+      for (const k in salv) {
+        if (c[k] && Array.isArray(salv[k]) && salv[k].length === 2) {
+          c[k] = [Number(salv[k][0]), Number(salv[k][1])];
+        }
+      }
+    }
+  } catch (e) { /* nessun override valido: uso i default */ }
+  return c;
+}
+function salvaCoordsPersonali(c) {
+  localStorage.setItem(CHIAVE_COORDS, JSON.stringify(c));
+}
+function resetCoordsPersonali() {
+  localStorage.removeItem(CHIAVE_COORDS);
+}
 
 function caricaModuli() {
   try { return JSON.parse(localStorage.getItem(CHIAVE_MODULI)) || []; }
@@ -4162,9 +4290,11 @@ async function caricaPdfLib() {
   return window.PDFLib;
 }
 
-async function generaPdf106() {
-  leggiEditorModulo();
-  salvaModuloCorrente();
+async function generaPdf106(prova) {
+  if (!prova) {
+    leggiEditorModulo();
+    salvaModuloCorrente();
+  }
   const m = MODULO_CORRENTE;
   toast('📄 Generazione PDF...');
 
@@ -4184,11 +4314,12 @@ async function generaPdf106() {
     // ── 1. Scrivo i campi sulla pagina 1 del template (coord native) ──
     const tplPage = tplDoc.getPages()[0];
     const ox = m.offset.x, oy = m.offset.y;
+    const COORDS = coordsEffettive();  // default o personalizzate dall'utente
 
     function scrivi(campo, testo, opt) {
       const safe = testoPdfSafe(testo);
       if (!safe) return;
-      const c = COORDS_106[campo];
+      const c = COORDS[campo];
       if (!c) return;
       tplPage.drawText(safe, {
         x: c[0] + ox,
@@ -4234,11 +4365,10 @@ async function generaPdf106() {
     //  - copyPages per la pagina 2 (istruzioni) a piena pagina
     const A4_W = 595.28, A4_H = 841.89;
     const TPL_W = tplPage.getWidth(), TPL_H = tplPage.getHeight();
-    // Margine pratico di taglio (~22pt). La scala riempie l'A4 lasciando
-    // questo margine: il modulo risulta grande e leggibile, vicino al B5
-    // reale ma senza eccesso di spazio bianco.
-    const MARG = 22;
-    const SCALA = Math.min((A4_W - 2 * MARG) / TPL_W, (A4_H - 2 * MARG) / TPL_H);
+    // Scala B5 ISO standard (176x250mm = 498.9x708.66pt): il modulo mantiene
+    // la dimensione reale del B5 dentro l'A4.
+    const SCALA = Math.min(498.9 / TPL_W, 708.66 / TPL_H);
+    const MARG = 24;
     const posX = MARG;
     const posY = A4_H - MARG - TPL_H * SCALA;
 
@@ -4276,15 +4406,19 @@ async function generaPdf106() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Mod106_${dataModulo(m)}.pdf`;
+    a.download = prova ? 'Mod106_prova_calibrazione.pdf' : `Mod106_${dataModulo(m)}.pdf`;
     a.click();
     URL.revokeObjectURL(url);
 
-    // Aggiorna stato a Stampato
-    m.stato = 'Stampato';
-    salvaModuloCorrente();
-    toast('✅ PDF generato');
-    renderEditorModulo();
+    if (prova) {
+      toast('✅ PDF di prova generato');
+    } else {
+      // Aggiorna stato a Stampato
+      m.stato = 'Stampato';
+      salvaModuloCorrente();
+      toast('✅ PDF generato');
+      renderEditorModulo();
+    }
   } catch (e) {
     alert('Errore nella generazione del PDF: ' + e.message);
   }
@@ -4352,7 +4486,109 @@ function apriAnagrafica106() {
       <div class="campo"><textarea id="ana-dest" style="height:80px" placeholder="Una destinazione per riga">${esc((a.destinazioni||[]).join('\n'))}</textarea></div>
 
       <button class="btn btn-primary" style="margin-top:14px" onclick="salvaAnagrafica106()">💾 Salva anagrafica</button>
+
+      <div class="ctrl-sezione-titolo" style="margin-top:18px">Stampa PDF</div>
+      <p class="imp-nota">Se i campi non cadono perfettamente nelle righe del modulo stampato, puoi spostarli uno per uno.</p>
+      <button class="btn btn-backup" onclick="apriCalibrazione106()">🎯 Calibrazione campi PDF</button>
     </div>`;
+}
+
+// ── CALIBRAZIONE CAMPI PDF ──
+// Stato della calibrazione in corso (campo selezionato e passo)
+let CAL_PASSO = 2;
+
+function apriCalibrazione106() {
+  document.getElementById('moduli-vista-lista').style.display = 'none';
+  document.getElementById('moduli-editor').style.display = 'none';
+  const el = document.getElementById('moduli-anagrafica');
+  el.style.display = '';
+  const c = coordsEffettive();
+
+  const righe = Object.keys(COORDS_106_DEFAULT).map(k => {
+    const xy = c[k];
+    return `
+      <div class="cal-riga" id="cal-riga-${k}">
+        <div class="cal-nome">${CAMPI_106_ETICHETTE[k] || k}
+          <span class="cal-valore" id="cal-val-${k}">x:${xy[0]} y:${xy[1]}</span>
+        </div>
+        <div class="cal-frecce">
+          <button class="cal-fr" onclick="spostaCampo('${k}',0,1)">↑</button>
+          <button class="cal-fr" onclick="spostaCampo('${k}',-1,0)">←</button>
+          <button class="cal-fr" onclick="spostaCampo('${k}',1,0)">→</button>
+          <button class="cal-fr" onclick="spostaCampo('${k}',0,-1)">↓</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="card">
+      <button class="btn btn-backup" onclick="apriAnagrafica106()">← Torna all'anagrafica</button>
+      <div class="card-titolo" style="margin-top:10px">🎯 Calibrazione campi PDF</div>
+      <p class="imp-nota">Sposta ogni campo con le frecce, poi genera un PDF di prova per vedere il risultato. Le posizioni restano salvate sul telefono.</p>
+
+      <div class="cal-passo">
+        <span>Passo spostamento:</span>
+        <button class="cal-passo-btn" id="cal-passo-1" onclick="setPassoCal(1)">1 pt</button>
+        <button class="cal-passo-btn attivo" id="cal-passo-2" onclick="setPassoCal(2)">2 pt</button>
+        <button class="cal-passo-btn" id="cal-passo-5" onclick="setPassoCal(5)">5 pt</button>
+      </div>
+
+      <button class="btn btn-primary" style="margin:6px 0 12px" onclick="generaPdfProva106()">📄 Genera PDF di prova</button>
+
+      <div class="cal-lista">${righe}</div>
+
+      <button class="btn btn-backup" style="margin-top:14px" onclick="confermaResetCal()">♻️ Ripristina valori predefiniti</button>
+    </div>`;
+}
+
+function setPassoCal(p) {
+  CAL_PASSO = p;
+  ['1','2','5'].forEach(n => {
+    const b = document.getElementById('cal-passo-' + n);
+    if (b) b.classList.toggle('attivo', Number(n) === p);
+  });
+}
+
+// Sposta un campo di CAL_PASSO punti nella direzione data (dx, dy in -1/0/1)
+function spostaCampo(campo, dx, dy) {
+  const c = coordsEffettive();
+  if (!c[campo]) return;
+  c[campo][0] = Math.round(c[campo][0] + dx * CAL_PASSO);
+  c[campo][1] = Math.round(c[campo][1] + dy * CAL_PASSO);
+  salvaCoordsPersonali(c);
+  const val = document.getElementById('cal-val-' + campo);
+  if (val) val.textContent = `x:${c[campo][0]} y:${c[campo][1]}`;
+}
+
+function confermaResetCal() {
+  if (confirm('Ripristinare le posizioni predefinite di tutti i campi? Le tue modifiche andranno perse.')) {
+    resetCoordsPersonali();
+    apriCalibrazione106();
+    toast('♻️ Posizioni ripristinate');
+  }
+}
+
+// Genera un PDF di prova con dati di esempio, usando le coordinate correnti
+async function generaPdfProva106() {
+  const MODULO_BACKUP = MODULO_CORRENTE;
+  MODULO_CORRENTE = {
+    id: 'prova', turnoId: null, stato: 'Bozza',
+    numero: '50', ufficio: 'U.P.G.S.P. - Nucleo Artificieri',
+    conducente: 'Ag.Sc. PALMIERO Armando', ordineDi: 'Sig. Dirigente',
+    modello: 'Dacia Dokker', targa: 'M1569', mezzo: 'Autovettura',
+    motivo: 'OP Bologna', partenza: 'Aeroporto di Bologna',
+    uscita: { ora: '08:00', km: '75442' },
+    rientro: { ora: '15:05', km: '75464' },
+    tappe: [], rapporto: { guasti: '', comunicazioni: '' },
+    itinerarioModo: 'sintetico', offset: { x: 0, y: 0 },
+    creato: Date.now(), aggiornato: Date.now()
+  };
+  // percorso = 75464-75442 = 22 (calcolato da percorsoKm)
+  try {
+    await generaPdf106(true);  // true = modalità prova (non salva, non cambia stato)
+  } finally {
+    MODULO_CORRENTE = MODULO_BACKUP;
+  }
 }
 
 // Legge i campi anagrafica correnti dalla UI in un oggetto
