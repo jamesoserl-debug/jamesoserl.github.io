@@ -4366,11 +4366,12 @@ async function generaPdf106(prova) {
     const A4_W = 595.28, A4_H = 841.89;
     const TPL_W = tplPage.getWidth(), TPL_H = tplPage.getHeight();
     // Scala B5 ISO standard (176x250mm = 498.9x708.66pt): il modulo mantiene
-    // la dimensione reale del B5 dentro l'A4.
+    // la dimensione reale del B5. Il modulo viene CENTRATO nell'A4 (sia in
+    // orizzontale che in verticale) così risulta equilibrato nel foglio.
     const SCALA = Math.min(498.9 / TPL_W, 708.66 / TPL_H);
-    const MARG = 24;
-    const posX = MARG;
-    const posY = A4_H - MARG - TPL_H * SCALA;
+    const bwTpl = TPL_W * SCALA, bhTpl = TPL_H * SCALA;
+    const posX = (A4_W - bwTpl) / 2;
+    const posY = (A4_H - bhTpl) / 2;
 
     const outDoc = await PDFLib.PDFDocument.create();
 
@@ -4380,7 +4381,7 @@ async function generaPdf106(prova) {
     a4.drawPage(embedded, { x: posX, y: posY, xScale: SCALA, yScale: SCALA });
 
     // ── 3. Bordo tratteggiato di taglio attorno al B5 ──
-    const bw = TPL_W * SCALA, bh = TPL_H * SCALA;
+    const bw = bwTpl, bh = bhTpl;
     a4.drawRectangle({
       x: posX, y: posY, width: bw, height: bh,
       borderColor: PDFLib.rgb(0.5, 0.5, 0.5),
