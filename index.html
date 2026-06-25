@@ -3748,32 +3748,32 @@ function testoPdfSafe(testo) {
 }
 const CHIAVE_ANAGRAFICA = 'moduli_anagrafica';
 
-// Coordinate calibrate sul template (578x824) confrontate con un Mod.106
-// reale compilato. Sistema: origine basso-sx, Y verso l'alto. Lo scaling
-// B5-in-A4 viene applicato in fase di generazione, queste restano coord
-// native del template. Questi sono i valori PREDEFINITI: l'utente può
-// personalizzarli dalla modalità calibrazione (salvati a parte).
+// Coordinate calibrate sul template B5 REALE (499x711pt = 176x250mm),
+// confrontate con un Mod.106 reale compilato. Sistema: origine basso-sx,
+// Y verso l'alto. Il template viene disegnato a dimensione naturale (scala
+// 1.0) in alto a sinistra dell'A4. Questi sono i valori PREDEFINITI:
+// l'utente può personalizzarli dalla modalità calibrazione.
 const COORDS_106_DEFAULT = {
-  ufficio:         [180, 713],
-  numero:          [216, 655],
-  conducente:      [166, 636],
-  ordineDi:        [160, 624],
-  modello:         [102, 612],
-  targa:           [270, 611],
-  motivoServizio:  [165, 593],
-  uscita_ora:      [110, 536],
-  uscita_km:       [140, 519],
-  rientro_ora:     [265, 536],
-  rientro_km:      [290, 519],
-  percorso_km:     [397, 524],
-  itinerario:      [120, 422],
-  guasti:          [430, 360],
-  data:            [100, 262],
-  conducente_firma:[80, 226]
+  ufficio:         [180, 602],
+  numero:          [200, 545],
+  conducente:      [180, 530],
+  ordineDi:        [165, 510],
+  modello:         [95, 490],
+  targa:           [360, 498],
+  motivoServizio:  [180, 480],
+  uscita_ora:      [155, 420],
+  uscita_km:       [155, 400],
+  rientro_ora:     [255, 420],
+  rientro_km:      [255, 400],
+  percorso_km:     [400, 406],
+  itinerario:      [225, 305],
+  guasti:          [450, 250],
+  data:            [170, 165],
+  conducente_firma:[150, 120]
 };
 // Posizioni della "X" sul tipo mezzo (riquadro a destra della testata)
-const MEZZO_X_106 = 387;
-const MEZZO_Y_106 = { 'Autovettura': 634, 'Autocarro': 622, 'Motoveicolo': 610, 'Natante': 598 };
+const MEZZO_X_106 = 375;
+const MEZZO_Y_106 = { 'Autovettura': 520, 'Autocarro': 508, 'Motoveicolo': 496, 'Natante': 484 };
 
 // Etichette leggibili dei campi per la schermata di calibrazione
 const CAMPI_106_ETICHETTE = {
@@ -4357,21 +4357,16 @@ async function generaPdf106(prova) {
     }
 
     // ── 2. Costruisco il PDF A4 finale ──
-    // Strategia robusta per pdf-lib 1.17.1:
-    //  - outDoc nuovo documento A4
-    //  - embedPage della pagina 1 del template (con i campi già disegnati):
-    //    embedPage cattura il contenuto CORRENTE della pagina, comprese le
-    //    scritte appena aggiunte con drawText
-    //  - copyPages per la pagina 2 (istruzioni) a piena pagina
+    // Il template è già in formato B5 REALE (499x711pt). Va disegnato a
+    // dimensione naturale (scala 1.0) in ALTO A SINISTRA del foglio A4,
+    // così due lati (alto e sinistro) coincidono col bordo del foglio e
+    // restano da tagliare solo il lato destro e quello inferiore.
     const A4_W = 595.28, A4_H = 841.89;
     const TPL_W = tplPage.getWidth(), TPL_H = tplPage.getHeight();
-    // Scala B5 ISO standard (176x250mm = 498.9x708.66pt): il modulo mantiene
-    // la dimensione reale del B5. Il modulo viene CENTRATO nell'A4 (sia in
-    // orizzontale che in verticale) così risulta equilibrato nel foglio.
-    const SCALA = Math.min(498.9 / TPL_W, 708.66 / TPL_H);
+    const SCALA = 1;                      // dimensione B5 reale, nessuna riduzione
+    const posX = 0;                       // bordo sinistro del foglio
+    const posY = A4_H - TPL_H;            // bordo superiore del foglio
     const bwTpl = TPL_W * SCALA, bhTpl = TPL_H * SCALA;
-    const posX = (A4_W - bwTpl) / 2;
-    const posY = (A4_H - bhTpl) / 2;
 
     const outDoc = await PDFLib.PDFDocument.create();
 
@@ -4380,21 +4375,24 @@ async function generaPdf106(prova) {
     const a4 = outDoc.addPage([A4_W, A4_H]);
     a4.drawPage(embedded, { x: posX, y: posY, xScale: SCALA, yScale: SCALA });
 
-    // ── 3. Bordo tratteggiato di taglio attorno al B5 ──
+    // ── 3. Tratteggio di taglio solo sui due lati interni (destro e inferiore) ──
+    // I lati superiore e sinistro coincidono col bordo del foglio, quindi
+    // non serve tratteggiarli: si taglia solo a destra e in basso.
     const bw = bwTpl, bh = bhTpl;
-    a4.drawRectangle({
-      x: posX, y: posY, width: bw, height: bh,
-      borderColor: PDFLib.rgb(0.5, 0.5, 0.5),
-      borderWidth: 0.6, borderDashArray: [4, 3],
-      borderOpacity: 1
+    // Lato destro (linea verticale tratteggiata)
+    a4.drawLine({
+      start: { x: posX + bw, y: posY }, end: { x: posX + bw, y: posY + bh },
+      thickness: 0.6, color: PDFLib.rgb(0.5, 0.5, 0.5), dashArray: [4, 3]
     });
-    // Segni angolari (crocette agli angoli)
-    const L = 10;
-    const segni = [[posX, posY], [posX + bw, posY], [posX, posY + bh], [posX + bw, posY + bh]];
-    segni.forEach(([cx, cy]) => {
-      a4.drawLine({ start: { x: cx - L, y: cy }, end: { x: cx + L, y: cy }, thickness: 0.7, color: PDFLib.rgb(0.4,0.4,0.4) });
-      a4.drawLine({ start: { x: cx, y: cy - L }, end: { x: cx, y: cy + L }, thickness: 0.7, color: PDFLib.rgb(0.4,0.4,0.4) });
+    // Lato inferiore (linea orizzontale tratteggiata)
+    a4.drawLine({
+      start: { x: posX, y: posY }, end: { x: posX + bw, y: posY },
+      thickness: 0.6, color: PDFLib.rgb(0.5, 0.5, 0.5), dashArray: [4, 3]
     });
+    // Segno angolare all'angolo basso-destra (il solo angolo "libero" utile)
+    const L = 12;
+    a4.drawLine({ start: { x: posX + bw - L, y: posY }, end: { x: posX + bw + L, y: posY }, thickness: 0.8, color: PDFLib.rgb(0.4,0.4,0.4) });
+    a4.drawLine({ start: { x: posX + bw, y: posY - L }, end: { x: posX + bw, y: posY + L }, thickness: 0.8, color: PDFLib.rgb(0.4,0.4,0.4) });
 
     // ── 4. Pagina 2 (istruzioni) a piena pagina, copiata dal template ──
     if (tplDoc.getPageCount() > 1) {
