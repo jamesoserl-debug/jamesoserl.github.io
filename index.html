@@ -128,6 +128,21 @@
     }
     .campo textarea { resize: none; height: 70px; }
 
+    /* Input ora/data: ripristino l'aspetto nativo così il selettore del
+       sistema (con il tasto "Imposta") si comporta normalmente su mobile
+       e il controllo non finisce spinto troppo a destra. */
+    .campo input[type="time"],
+    .campo input[type="date"] {
+      -webkit-appearance: auto;
+      appearance: auto;
+      min-height: 46px;
+      text-align: left;
+    }
+    .campo input[type="time"]::-webkit-date-and-time-value {
+      text-align: left;
+      margin: 0;
+    }
+
     .riga-due {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -3754,25 +3769,25 @@ const CHIAVE_ANAGRAFICA = 'moduli_anagrafica';
 // 1.0) in alto a sinistra dell'A4. Questi sono i valori PREDEFINITI:
 // l'utente può personalizzarli dalla modalità calibrazione.
 const COORDS_106_DEFAULT = {
-  ufficio:         [180, 602],
-  numero:          [200, 545],
-  conducente:      [180, 530],
-  ordineDi:        [165, 510],
-  modello:         [95, 490],
-  targa:           [360, 498],
-  motivoServizio:  [180, 480],
-  uscita_ora:      [155, 420],
-  uscita_km:       [155, 400],
-  rientro_ora:     [255, 420],
-  rientro_km:      [255, 400],
-  percorso_km:     [400, 406],
-  itinerario:      [225, 305],
-  guasti:          [450, 250],
-  data:            [170, 165],
-  conducente_firma:[150, 120]
+  ufficio:         [184, 604],
+  numero:          [238, 553],
+  conducente:      [166, 534],
+  ordineDi:        [135, 517],
+  modello:         [76, 500],
+  targa:           [188, 499],
+  motivoServizio:  [165, 482],
+  uscita_ora:      [86, 423],
+  uscita_km:       [128, 407],
+  rientro_ora:     [239, 423],
+  rientro_km:      [282, 407],
+  percorso_km:     [397, 412],
+  itinerario:      [120, 312],
+  guasti:          [430, 260],
+  data:            [100, 149],
+  conducente_firma:[55, 123]
 };
 // Posizioni della "X" sul tipo mezzo (riquadro a destra della testata)
-const MEZZO_X_106 = 375;
+const MEZZO_X_106 = 380;
 const MEZZO_Y_106 = { 'Autovettura': 520, 'Autocarro': 508, 'Motoveicolo': 496, 'Natante': 484 };
 
 // Etichette leggibili dei campi per la schermata di calibrazione
@@ -4330,6 +4345,45 @@ async function generaPdf106(prova) {
       });
     }
 
+    // Scrive un testo lungo su più righe, andando a capo tra le parole.
+    // Resta dentro larghezzaMax (in punti) e scende di interlinea per riga,
+    // fino a maxRighe. Usato per l'itinerario. testoPdfSafe applicato.
+    function scriviMultiriga(campo, testo, larghezzaMax, maxRighe) {
+      const safe = testoPdfSafe(testo);
+      if (!safe) return;
+      const c = COORDS[campo];
+      if (!c) return;
+      const size = 8, interlinea = 11;
+      const maxR = maxRighe || 4;
+      const parole = safe.split(/\s+/).filter(Boolean);
+      const righe = [];
+      let attuale = '';
+      for (const p of parole) {
+        const prova = attuale ? attuale + ' ' + p : p;
+        const larg = font.widthOfTextAtSize(prova, size);
+        if (larg > larghezzaMax && attuale) {
+          righe.push(attuale);
+          attuale = p;
+          if (righe.length === maxR - 1) {
+            // ultima riga disponibile: ci metto il resto e tronco se serve
+            attuale = parole.slice(parole.indexOf(p)).join(' ');
+            break;
+          }
+        } else {
+          attuale = prova;
+        }
+      }
+      if (attuale && righe.length < maxR) righe.push(attuale);
+      righe.forEach((riga, i) => {
+        tplPage.drawText(riga, {
+          x: c[0] + ox,
+          y: c[1] + oy - i * interlinea,
+          size, font,
+          color: PDFLib.rgb(0, 0, 0.05)
+        });
+      });
+    }
+
     scrivi('ufficio', m.ufficio);
     scrivi('numero', m.numero);
     scrivi('conducente', m.conducente);
@@ -4342,7 +4396,8 @@ async function generaPdf106(prova) {
     scrivi('rientro_ora', m.rientro.ora);
     scrivi('rientro_km', m.rientro.km);
     scrivi('percorso_km', percorsoKm(m));
-    scrivi('itinerario', generaItinerario(m, m.itinerarioModo));
+    // Itinerario: può essere lungo, va a capo su max 4 righe restando nel modulo
+    scriviMultiriga('itinerario', generaItinerario(m, m.itinerarioModo), 350, 4);
     scrivi('guasti', [m.rapporto.guasti, m.rapporto.comunicazioni].filter(Boolean).join(' - '));
     scrivi('data', formattaData(dataModulo(m)));
     scrivi('conducente_firma', m.conducente);
