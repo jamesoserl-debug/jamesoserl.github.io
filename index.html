@@ -3829,7 +3829,10 @@ const COORDS_106_DEFAULT = {
   itinerario:      [120, 312],
   guasti:          [430, 260],
   data:            [100, 149],
-  conducente_firma:[55, 123]
+  conducente_firma:[55, 123],
+  carb_super:      [235, 349],
+  carb_benzina:    [235, 338],
+  carb_gasolio:    [235, 325]
 };
 // Posizioni della "X" sul tipo mezzo (riquadro a destra della testata)
 const MEZZO_X_106 = 380;
@@ -3852,7 +3855,10 @@ const CAMPI_106_ETICHETTE = {
   itinerario:       'Itinerario',
   guasti:           'Rapporto / guasti',
   data:             'Data',
-  conducente_firma: 'Firma conducente'
+  conducente_firma: 'Firma conducente',
+  carb_super:       'Carburante - Supercarb.',
+  carb_benzina:     'Carburante - Benzina',
+  carb_gasolio:     'Carburante - Gasolio'
 };
 
 const CHIAVE_COORDS = 'moduli_coords_106';
@@ -3983,6 +3989,7 @@ function nuovoModulo(turnoId) {
     rientro: { ora: '', km: '' },
     tappe: [],
     rapporto: { guasti: '', comunicazioni: '' },
+    rifornimento: null,            // niente rifornimento di default
     itinerarioModo: 'sintetico',  // o 'dettagliato'
     offset: { x: 0, y: 0 },        // regolazione fine stampante
     creato: Date.now(),
@@ -4035,6 +4042,7 @@ function leggiEditorModulo() {
   MODULO_CORRENTE.rientro.km = g('mod-rientro-km');
   MODULO_CORRENTE.rapporto.guasti = g('mod-guasti');
   MODULO_CORRENTE.rapporto.comunicazioni = g('mod-comunicazioni');
+  leggiRifornimentoUI();
 }
 
 // Applica un mezzo salvato (per indice) ai campi targa e tipo mezzo
@@ -4159,7 +4167,12 @@ function renderEditorModulo() {
     </div>
 
     <div class="wizard-step">
-      <div class="wizard-step-titolo">4 · Genera PDF</div>
+      <div class="wizard-step-titolo">4 · Rifornimento</div>
+      ${renderRifornimento(m)}
+    </div>
+
+    <div class="wizard-step">
+      <div class="wizard-step-titolo">5 · Genera PDF</div>
       <p style="font-size:0.8rem;color:#64748B;margin-bottom:8px">Regola l'allineamento se sulla tua stampante il testo non è centrato:</p>
       <div class="modulo-offset">
         <button class="offset-btn" onclick="offsetModulo(-5,0)">◀</button>
@@ -4174,6 +4187,73 @@ function renderEditorModulo() {
 
   renderTappe();
   aggiornaItinAnteprima();
+}
+
+// ── RIFORNIMENTO ──
+// Disegna la sezione rifornimento dell'editor: pulsante "Aggiungi" se vuoto,
+// oppure i campi compilabili se il rifornimento esiste.
+function renderRifornimento(m) {
+  const r = m.rifornimento;
+  if (!r) {
+    return `<p style="font-size:0.82rem;color:#64748B;margin-bottom:8px">Nessun rifornimento per questo modulo.</p>
+      <button class="btn btn-backup" onclick="aggiungiRifornimento()">⛽ Aggiungi rifornimento</button>`;
+  }
+  const tipi = ['gasolio', 'benzina', 'supercarburante', 'altro'];
+  const opzTipo = tipi.map(t => `<option value="${t}"${r.tipo === t ? ' selected' : ''}>${t.charAt(0).toUpperCase() + t.slice(1)}</option>`).join('');
+  return `
+    <div class="campo"><label>Tipo carburante</label><select id="rif-tipo">${opzTipo}</select></div>
+    <div class="riga-due">
+      <div class="campo"><label>Litri</label><input type="text" inputmode="decimal" id="rif-litri" placeholder="es. 20,5" value="${esc(r.litri)}"></div>
+      <div class="campo"><label>Importo totale (€)</label><input type="text" inputmode="decimal" id="rif-importo" placeholder="es. 32,50" value="${esc(r.importo)}"></div>
+    </div>
+    <div class="campo"><label>Costo al litro (€, opzionale)</label><input type="text" inputmode="decimal" id="rif-costolitro" placeholder="es. 1,62" value="${esc(r.costoLitro)}"></div>
+    <div class="riga-due">
+      <div class="campo"><label>Data</label><input type="date" id="rif-data" value="${esc(r.data)}"></div>
+      <div class="campo"><label>Ora</label><input type="text" inputmode="numeric" id="rif-ora" placeholder="HH:MM" value="${esc(r.ora)}" onblur="gestisciInputOra(this)"></div>
+    </div>
+    <div class="campo"><label>Luogo / distributore</label><input type="text" id="rif-luogo" value="${esc(r.luogo)}"></div>
+    <div class="campo"><label>Km al rifornimento</label><input type="text" inputmode="numeric" id="rif-km" value="${esc(r.km)}"></div>
+    <div class="campo"><label>Note</label><input type="text" id="rif-note" value="${esc(r.note)}"></div>
+    <button class="btn btn-backup" onclick="eliminaRifornimento()">🗑 Elimina rifornimento</button>`;
+}
+
+function aggiungiRifornimento() {
+  leggiEditorModulo();
+  const oggi = new Date().toISOString().slice(0, 10);
+  MODULO_CORRENTE.rifornimento = {
+    tipo: 'gasolio', litri: '', importo: '', costoLitro: '',
+    data: oggi, ora: '', luogo: '', km: '', note: ''
+  };
+  salvaModuloCorrente();
+  renderEditorModulo();
+}
+
+function eliminaRifornimento() {
+  if (!confirm('Eliminare il rifornimento da questo modulo?')) return;
+  leggiEditorModulo();
+  MODULO_CORRENTE.rifornimento = null;
+  salvaModuloCorrente();
+  renderEditorModulo();
+  toast('🗑 Rifornimento eliminato');
+}
+
+// Legge i campi del rifornimento dalla UI (se presenti) nel record del modulo
+function leggiRifornimentoUI() {
+  if (!MODULO_CORRENTE.rifornimento) return;
+  const g = id => { const e = document.getElementById(id); return e ? e.value.trim() : ''; };
+  if (!document.getElementById('rif-tipo')) return;  // sezione non renderizzata
+  const oraN = normalizzaOra(g('rif-ora'));
+  MODULO_CORRENTE.rifornimento = {
+    tipo: g('rif-tipo') || 'gasolio',
+    litri: g('rif-litri'),
+    importo: g('rif-importo'),
+    costoLitro: g('rif-costolitro'),
+    data: g('rif-data'),
+    ora: (oraN === null) ? '' : oraN,
+    luogo: g('rif-luogo'),
+    km: g('rif-km'),
+    note: g('rif-note')
+  };
 }
 
 // ── TAPPE ──
@@ -4450,6 +4530,18 @@ async function generaPdf106(prova) {
     scrivi('guasti', [m.rapporto.guasti, m.rapporto.comunicazioni].filter(Boolean).join(' - '));
     scrivi('data', formattaData(dataModulo(m)));
     scrivi('conducente_firma', m.conducente);
+
+    // Litri del rifornimento sulla riga del carburante corrispondente.
+    // Solo se c'è un rifornimento con litri e tipo riconosciuto (gasolio/
+    // benzina/supercarburante). "altro" o assenza: non scrive nulla.
+    if (m.rifornimento && m.rifornimento.litri) {
+      const rigaCarb = {
+        gasolio: 'carb_gasolio',
+        benzina: 'carb_benzina',
+        supercarburante: 'carb_super'
+      }[m.rifornimento.tipo];
+      if (rigaCarb) scrivi(rigaCarb, m.rifornimento.litri);
+    }
 
     // X sul tipo mezzo
     const myMezzo = MEZZO_Y_106[m.mezzo];
