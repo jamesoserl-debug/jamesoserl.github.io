@@ -3827,12 +3827,13 @@ const COORDS_106_DEFAULT = {
   rientro_km:      [282, 407],
   percorso_km:     [397, 412],
   itinerario:      [120, 312],
-  guasti:          [430, 260],
+  guasti:          [69, 182],
   data:            [100, 149],
   conducente_firma:[55, 123],
   carb_super:      [235, 349],
   carb_benzina:    [235, 338],
-  carb_gasolio:    [235, 325]
+  carb_gasolio:    [235, 325],
+  tessera_carb:    [340, 318]
 };
 // Posizioni della "X" sul tipo mezzo (riquadro a destra della testata)
 const MEZZO_X_106 = 380;
@@ -3858,7 +3859,8 @@ const CAMPI_106_ETICHETTE = {
   conducente_firma: 'Firma conducente',
   carb_super:       'Carburante - Supercarb.',
   carb_benzina:     'Carburante - Benzina',
-  carb_gasolio:     'Carburante - Gasolio'
+  carb_gasolio:     'Carburante - Gasolio',
+  tessera_carb:     'N° tessera carburante'
 };
 
 const CHIAVE_COORDS = 'moduli_coords_106';
@@ -4517,21 +4519,6 @@ async function generaPdf106(prova) {
       return righe.length;
     }
 
-    // Scrive la tessera carburante su una riga dell'itinerario (indice riga
-    // partendo da 0). Solo se il numero tessera è compilato.
-    function scriviTessera(numeroRiga, numero) {
-      const safe = testoPdfSafe('Tessera: ' + numero);
-      if (!safe) return;
-      const c = COORDS['itinerario'];
-      if (!c) return;
-      tplPage.drawText(safe, {
-        x: c[0] + ox,
-        y: c[1] + oy - numeroRiga * 11,
-        size: 8, font,
-        color: PDFLib.rgb(0, 0, 0.05)
-      });
-    }
-
     scrivi('ufficio', m.ufficio);
     scrivi('numero', m.numero);
     scrivi('conducente', m.conducente);
@@ -4545,17 +4532,7 @@ async function generaPdf106(prova) {
     scrivi('rientro_km', m.rientro.km);
     scrivi('percorso_km', percorsoKm(m));
     // Itinerario: va a capo restando nel campo (max 4 righe).
-    // Se c'è un numero tessera carburante, riservo l'ultima riga (la 4ª):
-    // l'itinerario usa al massimo 3 righe e la tessera va sulla riga 4,
-    // così non si sovrappongono mai.
-    const numTessera = (m.rifornimento && m.rifornimento.tessera) ? m.rifornimento.tessera.trim() : '';
-    const maxRigheItin = numTessera ? 3 : 4;
-    const righeUsate = scriviMultiriga('itinerario', generaItinerario(m, m.itinerarioModo), 350, maxRigheItin);
-    if (numTessera) {
-      // Riga tessera: subito dopo l'itinerario, comunque non oltre la 4ª riga
-      const rigaTessera = Math.min(righeUsate, 3);
-      scriviTessera(rigaTessera, numTessera);
-    }
+    scriviMultiriga('itinerario', generaItinerario(m, m.itinerarioModo), 350, 4);
     scrivi('guasti', [m.rapporto.guasti, m.rapporto.comunicazioni].filter(Boolean).join(' - '));
     scrivi('data', formattaData(dataModulo(m)));
     scrivi('conducente_firma', m.conducente);
@@ -4570,6 +4547,12 @@ async function generaPdf106(prova) {
         supercarburante: 'carb_super'
       }[m.rifornimento.tipo];
       if (rigaCarb) scrivi(rigaCarb, m.rifornimento.litri);
+    }
+
+    // Numero tessera carburante: campo autonomo (non nell'itinerario).
+    // Solo se compilato. Calibrabile come gli altri campi.
+    if (m.rifornimento && m.rifornimento.tessera && m.rifornimento.tessera.trim()) {
+      scrivi('tessera_carb', 'Tessera: ' + m.rifornimento.tessera.trim());
     }
 
     // X sul tipo mezzo
