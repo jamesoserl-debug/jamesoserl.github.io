@@ -1145,6 +1145,16 @@
     .modulo-stato-badge.s-Chiuso   { background: #16A34A; }
     .modulo-stato-badge.s-Stampato { background: #7C3AED; }
     .modulo-itinerario { font-size: 0.8rem; color: #475569; }
+    .modulo-catena {
+      display: inline-block;
+      margin-top: 5px;
+      margin-right: 6px;
+      font-size: 0.7rem;
+      color: #92400E;
+      background: #FEF3C7;
+      border-radius: 5px;
+      padding: 2px 7px;
+    }
 
     .wizard-step {
       background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 12px;
@@ -3833,7 +3843,7 @@ const COORDS_106_DEFAULT = {
   carb_super:      [235, 349],
   carb_benzina:    [235, 338],
   carb_gasolio:    [235, 325],
-  tessera_carb:    [340, 318]
+  tessera_carb:    [60, 243]
 };
 // Posizioni della "X" sul tipo mezzo (riquadro a destra della testata)
 const MEZZO_X_106 = 380;
@@ -3992,6 +4002,8 @@ function nuovoModulo(turnoId) {
     tappe: [],
     rapporto: { guasti: '', comunicazioni: '' },
     rifornimento: null,            // niente rifornimento di default
+    moduloPrecedente: null,        // id del modulo da cui nasce (catena rifornimento)
+    moduloSuccessivo: null,        // id del modulo generato al rifornimento
     itinerarioModo: 'sintetico',  // o 'dettagliato'
     offset: { x: 0, y: 0 },        // regolazione fine stampante
     creato: Date.now(),
@@ -4075,6 +4087,10 @@ function renderModuli() {
   }
   el.innerHTML = moduli.map(m => {
     const itin = generaItinerario(m, 'sintetico') || '(itinerario vuoto)';
+    // Indicatore catena rifornimento
+    let catena = '';
+    if (m.moduloPrecedente) catena += '<span class="modulo-catena">⛽ segue rifornimento</span>';
+    if (m.moduloSuccessivo) catena += '<span class="modulo-catena">→ continua in altro modulo</span>';
     return `
       <div class="modulo-card s-${m.stato}" onclick="apriModulo('${m.id}')">
         <div class="modulo-card-top">
@@ -4082,6 +4098,7 @@ function renderModuli() {
           <span class="modulo-stato-badge s-${m.stato}">${m.stato}</span>
         </div>
         <div class="modulo-itinerario">${esc(itin)}</div>
+        ${catena}
       </div>`;
   }).join('');
 }
@@ -4217,15 +4234,22 @@ function renderRifornimento(m) {
     <div class="campo"><label>Km al rifornimento</label><input type="text" inputmode="numeric" id="rif-km" value="${esc(r.km)}"></div>
     <div class="campo"><label>N° tessera carburante (opzionale)</label><input type="text" id="rif-tessera" placeholder="es. 123456" value="${esc(r.tessera || '')}"></div>
     <div class="campo"><label>Note</label><input type="text" id="rif-note" value="${esc(r.note)}"></div>
-    <button class="btn btn-backup" onclick="eliminaRifornimento()">🗑 Elimina rifornimento</button>`;
+    <button class="btn btn-backup" onclick="eliminaRifornimento()">🗑 Elimina rifornimento</button>
+    ${!m.moduloSuccessivo && m.stato !== 'Chiuso' && m.stato !== 'Stampato' ? `
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid #E2E8F0">
+      <p class="imp-nota">Nella prassi, dopo il rifornimento si chiude il modulo e se ne apre uno nuovo. Compila i km al rifornimento, poi:</p>
+      <button class="btn btn-primary" onclick="chiudiAlRifornimento()">⛽ Chiudi al rifornimento e apri nuovo modulo</button>
+    </div>` : ''}
+    ${m.moduloSuccessivo ? `<p class="imp-nota" style="margin-top:10px">→ Da questo modulo è già stato aperto un modulo successivo (vedi lista).</p>` : ''}`;
 }
 
 function aggiungiRifornimento() {
   leggiEditorModulo();
   const oggi = new Date().toISOString().slice(0, 10);
+  const oraAdesso = new Date().toTimeString().slice(0, 5);  // precompilata, modificabile
   MODULO_CORRENTE.rifornimento = {
     tipo: 'gasolio', litri: '', importo: '', costoLitro: '',
-    data: oggi, ora: '', luogo: '', km: '', tessera: '', note: ''
+    data: oggi, ora: oraAdesso, luogo: '', km: '', tessera: '', note: ''
   };
   salvaModuloCorrente();
   renderEditorModulo();
@@ -4405,6 +4429,99 @@ function chiudiModulo() {
   renderEditorModulo();
 }
 
+// ── CATENA RIFORNIMENTO ──
+// Nella prassi, dopo un rifornimento si chiude il Mod. 106 in corso e se ne
+// apre uno nuovo. Questa funzione lo fa con conferma esplicita:
+//  - chiude il modulo corrente usando i km del rifornimento come km rientro
+//  - crea un nuovo modulo in stato Aperto che parte dai km del rifornimento
+//  - collega i due moduli (moduloPrecedente / moduloSuccessivo)
+// Niente stampa automatica: il nuovo modulo resta da rivedere e completare.
+function chiudiAlRifornimento() {
+  leggiEditorModulo();
+  const m = MODULO_CORRENTE;
+  const r = m.rifornimento;
+
+  // Requisiti minimi, senza i quali non si può dividere il percorso:
+  // servono SIA i km SIA l'ora del rifornimento, perché il primo modulo
+  // chiude con ora rientro = ora rifornimento e il secondo parte con
+  // ora uscita = ora rifornimento. Senza ora, la catena è incompleta.
+  if (!r) { alert('Aggiungi prima un rifornimento a questo modulo.'); return; }
+  if (!r.km || !String(r.km).trim() || !r.ora || !String(r.ora).trim()) {
+    alert('Per dividere il Mod. 106 servono sia i km al rifornimento sia l\'ora del rifornimento.');
+    return;
+  }
+  if (m.moduloSuccessivo) {
+    alert('Da questo modulo è già stato creato un modulo successivo. Aprilo dalla lista.');
+    return;
+  }
+
+  // Riepilogo di conferma con i numeri reali
+  const kmRif = String(r.km).trim();
+  const kmUscita = m.uscita.km ? String(m.uscita.km).trim() : '';
+  let percorso = '';
+  const u = parseFloat(kmUscita), k = parseFloat(kmRif);
+  if (!isNaN(u) && !isNaN(k) && k >= u) percorso = String(k - u);
+  const oraRif = String(r.ora).trim();
+  const ripartenza = (r.luogo && r.luogo.trim()) ? r.luogo.trim() : (m.partenza || '');
+
+  const msg = 'Chiudere questo Mod. 106 al rifornimento e aprirne uno nuovo?\n\n' +
+    '— Questo modulo verrà CHIUSO con:\n' +
+    '   rientro ore ' + oraRif + ', contachilometri ' + kmRif +
+    (percorso ? ' (percorso ' + percorso + ' km)' : '') + '\n\n' +
+    '— Il NUOVO modulo partirà con:\n' +
+    '   uscita ore ' + oraRif + ', contachilometri ' + kmRif + '\n' +
+    '   partenza: ' + ripartenza + '\n' +
+    '   stesso conducente, mezzo e motivo (modificabili).\n\n' +
+    'Il nuovo modulo resta in bozza: potrai controllare tutto prima di stampare.';
+  if (!confirm(msg)) return;
+
+  // 1) Chiudo il modulo corrente al rifornimento
+  if (!m.rientro.ora) m.rientro.ora = oraRif;
+  if (!m.rientro.km) m.rientro.km = kmRif;
+  m.stato = 'Chiuso';
+
+  // 2) Creo il nuovo modulo che riparte dal rifornimento
+  const nuovo = {
+    id: 'm' + Date.now().toString(36),
+    turnoId: m.turnoId || null,
+    stato: 'Aperto',
+    numero: '',
+    ufficio: m.ufficio || '',
+    conducente: m.conducente || '',
+    ordineDi: m.ordineDi || '',
+    targa: m.targa || '',
+    modello: m.modello || '',
+    mezzo: m.mezzo || 'Autovettura',
+    motivo: m.motivo || '',
+    partenza: ripartenza,
+    uscita: { ora: oraRif, km: kmRif },
+    rientro: { ora: '', km: '' },
+    tappe: [],
+    rapporto: { guasti: '', comunicazioni: '' },
+    rifornimento: null,
+    moduloPrecedente: m.id,
+    moduloSuccessivo: null,
+    itinerarioModo: m.itinerarioModo || 'sintetico',
+    offset: { x: m.offset.x, y: m.offset.y },
+    creato: Date.now(),
+    aggiornato: Date.now()
+  };
+
+  // 3) Collego i due moduli e salvo entrambi
+  m.moduloSuccessivo = nuovo.id;
+  m.aggiornato = Date.now();
+  const moduli = caricaModuli();
+  const idx = moduli.findIndex(x => x.id === m.id);
+  if (idx >= 0) moduli[idx] = m; else moduli.push(m);
+  moduli.push(nuovo);
+  salvaModuliStorage(moduli);
+
+  // 4) Apro il nuovo modulo nell'editor per il controllo
+  MODULO_CORRENTE = nuovo;
+  toast('⛽ Modulo chiuso al rifornimento - nuovo modulo aperto');
+  renderEditorModulo();
+}
+
 // ── OFFSET stampante ──
 function offsetModulo(dx, dy) {
   MODULO_CORRENTE.offset.x += dx;
@@ -4552,7 +4669,7 @@ async function generaPdf106(prova) {
     // Numero tessera carburante: campo autonomo (non nell'itinerario).
     // Solo se compilato. Calibrabile come gli altri campi.
     if (m.rifornimento && m.rifornimento.tessera && m.rifornimento.tessera.trim()) {
-      scrivi('tessera_carb', 'Tessera: ' + m.rifornimento.tessera.trim());
+      scrivi('tessera_carb', 'N° tessera carburante: ' + m.rifornimento.tessera.trim());
     }
 
     // X sul tipo mezzo
