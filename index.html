@@ -4286,6 +4286,12 @@ function estremiItinerario(m) {
   const punti = [];
   if (partenza) punti.push(partenza);
   punti.push(...tappe);
+  // Se il modulo è concluso, l'ultimo punto è il luogo di arrivo
+  const concluso = (m.stato === 'Chiuso' || m.stato === 'Stampato' || (m.rientro && m.rientro.ora));
+  if (concluso) {
+    const arrivo = luogoArrivo(m);
+    if (arrivo && punti[punti.length - 1] !== arrivo) punti.push(arrivo);
+  }
   if (punti.length === 0) return 'Itinerario da compilare';
   if (punti.length === 1) return esc(punti[0]);
   return esc(punti[0]) + ' → ' + esc(punti[punti.length - 1]);
@@ -4533,7 +4539,7 @@ function renderEditorModulo() {
     </div>`;
 
   if (step === 2) { renderTappe(); aggiornaItinAnteprima(); }
-  if (step === 3) caricaAnteprimeFoto();
+  if (step === 3) renderAllegatiRifornimento(m.id);
 }
 
 // ── Pagina 1: Apertura ──
@@ -4617,7 +4623,7 @@ function renderStep4Chiusura(m) {
     <div class="campo"><label>Percorso Km (calcolato)</label><input type="text" id="mod-percorso" value="${percorsoKm(m)}" readonly style="background:#EEF2F7"></div>
     <div class="campo"><label>Guasti / incidenti</label><input type="text" id="mod-guasti" value="${esc(m.rapporto.guasti)}"></div>
     <div class="campo"><label>Comunicazioni del conducente</label><input type="text" id="mod-comunicazioni" value="${esc(m.rapporto.comunicazioni)}"></div>
-    <button class="btn btn-primary" onclick="chiudiModulo()">🏁 Chiudi definitivamente il modulo (rientro ${esc(m.partenza)})</button>
+    <button class="btn btn-primary" onclick="chiudiModulo()">🏁 Chiudi definitivamente il modulo (rientro ${esc(luogoArrivo(m))})</button>
     <div class="wizard-nav">
       <button class="btn btn-backup" onclick="vaiStep(3)">← Indietro</button>
       <button class="btn btn-backup" onclick="vaiStep(5)">Riepilogo →</button>
@@ -4810,6 +4816,10 @@ async function acquisisciFoto(input, tipo) {
   if (!file) return;
   if (FOTO_IN_CORSO) return;
   if (!MODULO_CORRENTE) return;
+  // I campi digitati sono già stati salvati da apriFotocamera/apriGalleria,
+  // ma li risalvo: se la pagina è stata sospesa e ripristinata dal sistema
+  // durante lo scatto, questa è la copia buona di ciò che c'è a schermo.
+  salvaDatiRifornimentoDaDom();
   FOTO_IN_CORSO = true;
   toast('📷 Elaborazione foto...');
   try {
@@ -4828,7 +4838,8 @@ async function acquisisciFoto(input, tipo) {
     });
     MODULI_CON_ALLEGATI.add(MODULO_CORRENTE.id);
     toast('✅ Foto salvata (' + Math.round(blob.size / 1024) + ' KB)');
-    renderEditorModulo();
+    // Aggiorno SOLO i box foto: gli altri campi restano come li hai lasciati
+    await renderAllegatiRifornimento(MODULO_CORRENTE.id);
   } catch (e) {
     alert('Impossibile salvare la foto: ' + e.message);
   } finally {
@@ -4837,6 +4848,7 @@ async function acquisisciFoto(input, tipo) {
 }
 
 async function confermaEliminaFoto(tipo) {
+  salvaDatiRifornimentoDaDom();     // non perdere i campi compilati
   const p = PROFILI_FOTO[tipo];
   const extra = (tipo === 'tessera')
     ? '\n\nLa foto della tessera contiene dati sensibili e verrà cancellata definitivamente dal dispositivo.'
@@ -4847,7 +4859,7 @@ async function confermaEliminaFoto(tipo) {
     const restanti = await allegatiDiModulo(MODULO_CORRENTE.id);
     if (!restanti.length) MODULI_CON_ALLEGATI.delete(MODULO_CORRENTE.id);
     toast('🗑 Foto eliminata');
-    renderEditorModulo();
+    await renderAllegatiRifornimento(MODULO_CORRENTE.id);
   } catch (e) {
     alert('Impossibile eliminare la foto: ' + e.message);
   }
@@ -4862,14 +4874,21 @@ function revocaAnteprime() {
   URL_ANTEPRIME = [];
 }
 
-// Carica le anteprime nelle due sezioni (chiamata dopo il render della pagina 3)
-async function caricaAnteprimeFoto() {
-  if (!MODULO_CORRENTE) return;
+// Aggiorna SOLTANTO i box delle fotografie (anteprima, dimensioni, peso,
+// pulsanti). Non ricostruisce la pagina del wizard: tutti gli altri input
+// restano intatti nel DOM con i valori digitati.
+async function renderAllegatiRifornimento(moduloId) {
+  const id = moduloId || (MODULO_CORRENTE && MODULO_CORRENTE.id);
+  if (!id) return;
+  revocaAnteprime();
   for (const tipo of ['scontrino', 'tessera']) {
     const box = document.getElementById('foto-box-' + tipo);
     if (!box) continue;
-    const rec = await leggiAllegato(MODULO_CORRENTE.id, tipo);
-    if (!rec) continue;
+    const rec = await leggiAllegato(id, tipo);
+    if (!rec) {
+      box.innerHTML = '<p class="imp-nota">Nessuna fotografia.</p>';
+      continue;
+    }
     const url = URL.createObjectURL(rec.blob);
     URL_ANTEPRIME.push(url);
     const kb = Math.round(rec.dimensione / 1024);
@@ -4880,12 +4899,25 @@ async function caricaAnteprimeFoto() {
           <div class="foto-meta">${rec.larghezza}×${rec.altezza} px · ${kb} KB</div>
           <div class="foto-azioni">
             <button class="btn-mini" onclick="apriFotoIntera('${tipo}')">🔍 Apri</button>
-            <button class="btn-mini" onclick="document.getElementById('inp-cam-${tipo}').click()">🔄 Sostituisci</button>
+            <button class="btn-mini" onclick="apriFotocamera('${tipo}')">🔄 Sostituisci</button>
             <button class="btn-mini btn-mini-rosso" onclick="confermaEliminaFoto('${tipo}')">🗑 Elimina</button>
           </div>
         </div>
       </div>`;
   }
+}
+
+// Aperture sicure: salvo SEMPRE i campi prima di attivare l'input, perché
+// l'apertura della fotocamera può sospendere la pagina.
+function apriFotocamera(tipo) {
+  salvaDatiRifornimentoDaDom();
+  const el = document.getElementById('inp-cam-' + tipo);
+  if (el) el.click();
+}
+function apriGalleria(tipo) {
+  salvaDatiRifornimentoDaDom();
+  const el = document.getElementById('inp-gal-' + tipo);
+  if (el) el.click();
 }
 
 // Visore a schermo intero
@@ -4911,8 +4943,8 @@ function renderSezioneFoto(tipo) {
         <p class="imp-nota">Nessuna fotografia.</p>
       </div>
       <div class="foto-pulsanti">
-        <button class="btn btn-backup" onclick="document.getElementById('inp-cam-${tipo}').click()">📷 Scatta foto</button>
-        <button class="btn btn-backup" onclick="document.getElementById('inp-gal-${tipo}').click()">🖼 Scegli dalla galleria</button>
+        <button class="btn btn-backup" onclick="apriFotocamera('${tipo}')">📷 Scatta foto</button>
+        <button class="btn btn-backup" onclick="apriGalleria('${tipo}')">🖼 Scegli dalla galleria</button>
       </div>
       <input type="file" id="inp-cam-${tipo}" accept="image/*" capture="environment" style="display:none" onchange="acquisisciFoto(this,'${tipo}')">
       <input type="file" id="inp-gal-${tipo}" accept="image/*" style="display:none" onchange="acquisisciFoto(this,'${tipo}')">
@@ -4936,16 +4968,18 @@ function renderRifornimento(m) {
   const tipi = ['gasolio', 'benzina', 'supercarburante', 'altro'];
   const opzTipo = tipi.map(t => `<option value="${t}"${r.tipo === t ? ' selected' : ''}>${t.charAt(0).toUpperCase() + t.slice(1)}</option>`).join('');
 
-  // Scelta esplicita della partenza del nuovo modulo (mai silenziosa)
+  // Scelta esplicita della partenza del nuovo modulo (mai silenziosa).
+  // La scelta è conservata nel record: sopravvive a ridisegni e riaperture.
   const ana = caricaAnagrafica();
-  const sedePredef = ana.partenza || m.partenza || 'Aeroporto di Bologna';
+  const sedePredef = ana.partenza || 'Aeroporto di Bologna';
+  const scelto = r.partenzaNuovo || 'rifornimento';
   const sceltaPartenza = `
     <div class="campo" style="margin-top:12px"><label>Partenza del nuovo modulo (dopo la divisione)</label>
       <div class="rif-partenza-opzioni">
-        <label class="rif-radio"><input type="radio" name="rif-partenza" value="rifornimento" checked> Luogo del rifornimento</label>
-        <label class="rif-radio"><input type="radio" name="rif-partenza" value="sede"> Sede predefinita (${esc(sedePredef)})</label>
-        <label class="rif-radio"><input type="radio" name="rif-partenza" value="altro"> Altro luogo:</label>
-        <input type="text" id="rif-partenza-altro" placeholder="Scrivi il luogo" style="margin-top:4px">
+        <label class="rif-radio"><input type="radio" name="rif-partenza" value="rifornimento"${scelto === 'rifornimento' ? ' checked' : ''}> Luogo del rifornimento</label>
+        <label class="rif-radio"><input type="radio" name="rif-partenza" value="sede"${scelto === 'sede' ? ' checked' : ''}> Sede predefinita (${esc(sedePredef)})</label>
+        <label class="rif-radio"><input type="radio" name="rif-partenza" value="altro"${scelto === 'altro' ? ' checked' : ''}> Altro luogo:</label>
+        <input type="text" id="rif-partenza-altro" placeholder="Scrivi il luogo" value="${esc(r.partenzaAltro || '')}" style="margin-top:4px">
       </div>
     </div>`;
 
@@ -4986,7 +5020,8 @@ function aggiungiRifornimento() {
   const oraAdesso = new Date().toTimeString().slice(0, 5);  // precompilata, modificabile
   MODULO_CORRENTE.rifornimento = {
     tipo: 'gasolio', litri: '', importo: '', costoLitro: '',
-    data: oggi, ora: oraAdesso, luogo: '', km: '', tessera: '', note: ''
+    data: oggi, ora: oraAdesso, luogo: '', km: '', tessera: '', note: '',
+    partenzaNuovo: 'rifornimento', partenzaAltro: ''
   };
   salvaModuloCorrente();
   renderEditorModulo();
@@ -5007,6 +5042,10 @@ function leggiRifornimentoUI() {
   const g = id => { const e = document.getElementById(id); return e ? e.value.trim() : ''; };
   if (!document.getElementById('rif-tipo')) return;  // sezione non renderizzata
   const oraN = normalizzaOra(g('rif-ora'));
+  // Scelta della partenza del nuovo modulo: la conservo nel record così
+  // sopravvive a ridisegni e alla chiusura dell'app.
+  const radio = document.querySelector('input[name="rif-partenza"]:checked');
+  const prec = MODULO_CORRENTE.rifornimento;
   MODULO_CORRENTE.rifornimento = {
     tipo: g('rif-tipo') || 'gasolio',
     litri: g('rif-litri'),
@@ -5017,8 +5056,20 @@ function leggiRifornimentoUI() {
     luogo: g('rif-luogo'),
     km: g('rif-km'),
     tessera: g('rif-tessera'),
-    note: g('rif-note')
+    note: g('rif-note'),
+    partenzaNuovo: radio ? radio.value : (prec.partenzaNuovo || 'rifornimento'),
+    partenzaAltro: (document.getElementById('rif-partenza-altro') ? g('rif-partenza-altro') : (prec.partenzaAltro || ''))
   };
+}
+
+// Salva nel record TUTTI i campi della pagina Rifornimento presenti nel DOM.
+// Va chiamata prima di aprire la fotocamera/galleria, prima di sostituire o
+// eliminare una foto e prima di qualunque ridisegno: senza, i valori digitati
+// e non ancora salvati andrebbero persi.
+function salvaDatiRifornimentoDaDom() {
+  if (!MODULO_CORRENTE) return;
+  leggiEditorModulo();      // null-safe: legge solo ciò che è a schermo
+  salvaModuloCorrente();
 }
 
 // ── TAPPE ──
@@ -5115,20 +5166,29 @@ function mapsTappa(i) {
 }
 
 // ── ITINERARIO ──
+// Luogo di arrivo del modulo: normalmente si rientra da dove si è partiti,
+// ma un modulo può terminare altrove (es. chiuso al distributore per il
+// rifornimento). Fallback su partenza: i moduli esistenti non cambiano.
+function luogoArrivo(m) {
+  return (m.rientroLuogo && m.rientroLuogo.trim()) ? m.rientroLuogo.trim() : (m.partenza || 'Aeroporto di Bologna');
+}
+
 function generaItinerario(m, modo) {
   const tappe = m.tappe || [];
   const partenza = m.partenza || 'Aeroporto di Bologna';
+  const arrivo = luogoArrivo(m);
+  const concluso = (m.stato === 'Chiuso' || m.stato === 'Stampato' || m.rientro.ora);
   if (modo === 'dettagliato') {
     const righe = [];
     righe.push(`${m.uscita.ora || ''} Uscita ${partenza}`.trim());
     tappe.forEach(t => { if (t.luogo) righe.push(`${t.ora || ''} ${t.luogo}`.trim()); });
-    if (m.stato === 'Chiuso' || m.stato === 'Stampato' || m.rientro.ora)
-      righe.push(`${m.rientro.ora || ''} Rientro ${partenza}`.trim());
+    if (concluso) righe.push(`${m.rientro.ora || ''} Rientro ${arrivo}`.trim());
     return righe.join('  ·  ');
   }
   // sintetico
   const punti = [partenza, ...tappe.filter(t => t.luogo).map(t => t.luogo)];
-  if (m.stato === 'Chiuso' || m.stato === 'Stampato' || m.rientro.ora) punti.push(partenza);
+  // Il punto d'arrivo si aggiunge solo se non è già l'ultimo della lista
+  if (concluso && punti[punti.length - 1] !== arrivo) punti.push(arrivo);
   return punti.join(' → ');
 }
 
@@ -5198,6 +5258,13 @@ function chiudiAlRifornimento() {
     alert('Per dividere il Mod. 106 servono sia i km al rifornimento sia l\'ora del rifornimento.');
     return;
   }
+  // Il luogo serve sempre: è il punto di arrivo del primo modulo e (di norma)
+  // il punto di partenza del secondo.
+  if (!r.luogo || !String(r.luogo).trim()) {
+    alert('Per creare correttamente i due Mod. 106 devi indicare anche il luogo del rifornimento.');
+    return;
+  }
+  const luogoRif = String(r.luogo).trim();
   if (m.moduloSuccessivo) {
     alert('Da questo modulo è già stato creato un modulo successivo. Aprilo dalla lista.');
     return;
@@ -5237,37 +5304,35 @@ function chiudiAlRifornimento() {
 
   // ── Partenza del nuovo modulo: scelta esplicita dai radio ──
   const scelta = document.querySelector('input[name="rif-partenza"]:checked');
-  const tipoPartenza = scelta ? scelta.value : 'rifornimento';
+  const tipoPartenza = scelta ? scelta.value : (r.partenzaNuovo || 'rifornimento');
+  const ana = caricaAnagrafica();
+  const sedePredef = ana.partenza || 'Aeroporto di Bologna';
   let ripartenza = '';
   if (tipoPartenza === 'rifornimento') {
-    ripartenza = (r.luogo && r.luogo.trim()) ? r.luogo.trim() : '';
-    if (!ripartenza) {
-      alert('Hai scelto di ripartire dal luogo del rifornimento, ma il campo "Luogo / distributore" è vuoto. Compilalo o scegli un\'altra partenza.');
-      return;
-    }
+    ripartenza = luogoRif;
   } else if (tipoPartenza === 'sede') {
-    const ana = caricaAnagrafica();
-    ripartenza = ana.partenza || m.partenza || 'Aeroporto di Bologna';
+    ripartenza = sedePredef;
   } else {
     const altroEl = document.getElementById('rif-partenza-altro');
-    ripartenza = altroEl ? altroEl.value.trim() : '';
+    ripartenza = altroEl ? altroEl.value.trim() : (r.partenzaAltro || '');
     if (!ripartenza) {
       alert('Hai scelto "Altro luogo": scrivi il luogo di partenza del nuovo modulo.');
       return;
     }
   }
+  // Destinazione prevista del secondo modulo: la sede (Aeroporto di Bologna).
+  // Resta previsione: il modulo si chiude solo quando inserisci ora e km
+  // di rientro nella pagina 4.
+  const destinazioneNuovo = sedePredef;
 
   // ── Riepilogo di conferma ──
-  const msg = 'Il modulo corrente sarà chiuso:\n' +
-    '   alle ore ' + oraRif + '\n' +
-    '   al km ' + kmRif + '\n' +
-    '   percorso: ' + percorso + ' km\n\n' +
-    'Il nuovo modulo partirà:\n' +
+  const msg = 'Primo Mod. 106: ' + (m.partenza || '') + ' → ' + luogoRif + '\n' +
+    '   si chiude alle ore ' + oraRif + ', km ' + kmRif + ' (percorso ' + percorso + ' km)\n\n' +
+    'Secondo Mod. 106: ' + ripartenza + ' → ' + destinazioneNuovo + '\n' +
+    '   si apre alle ore ' + oraRif + ', km ' + kmRif + '\n' +
     '   in data ' + formattaData(dataNuovo) + (dataNuovo !== dataPrimo ? ' (giorno successivo: rifornimento dopo mezzanotte)' : '') + '\n' +
-    '   alle ore ' + oraRif + '\n' +
-    '   dal km ' + kmRif + '\n' +
-    '   da ' + ripartenza + '\n' +
-    '   numero: ' + (numeroNuovo ? numeroNuovo + ' (proposto, da verificare)' : '(da assegnare in pagina 1)') + '\n\n' +
+    '   numero: ' + (numeroNuovo ? numeroNuovo + ' (proposto, da verificare)' : '(da assegnare in pagina 1)') + '\n' +
+    '   resta APERTO: ora e km di rientro li inserirai tu al rientro effettivo.\n\n' +
     'Confermi?';
 
   const btn = document.getElementById('btn-dividi-rif');
@@ -5277,8 +5342,10 @@ function chiudiAlRifornimento() {
     if (!confirm(msg)) return;  // annullato: nessuna modifica (finally riabilita)
 
     // ── Primo modulo: SEMPRE sovrascritto ai valori del rifornimento ──
+    // Termina nel luogo del rifornimento, non torna in sede.
     m.rientro.ora = oraRif;
     m.rientro.km = kmRif;
+    m.rientroLuogo = luogoRif;
     m.stato = 'Chiuso';
     m.aggiornato = Date.now();
 
@@ -5296,10 +5363,11 @@ function chiudiAlRifornimento() {
       modello: m.modello || '',
       mezzo: m.mezzo || 'Autovettura',
       motivo: m.motivo || '',
-      partenza: ripartenza,
+      partenza: ripartenza,          // dal distributore (o dalla scelta fatta)
+      rientroLuogo: destinazioneNuovo,   // destinazione prevista: la sede
       uscita: { ora: oraRif, km: kmRif },
-      rientro: { ora: '', km: '' },
-      tappe: [],
+      rientro: { ora: '', km: '' },      // si chiuderà quando rientri davvero
+      tappe: [],                          // itinerario nuovo, non copiato
       rapporto: { guasti: '', comunicazioni: '' },
       rifornimento: null,                 // il nuovo NON eredita il rifornimento
       moduloPrecedente: m.id,
