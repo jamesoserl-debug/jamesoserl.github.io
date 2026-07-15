@@ -1154,9 +1154,10 @@
 
     /* ── MODULI 106 ──────────────────────────────────── */
     .modulo-card {
+      position: relative;
       background: #fff;
       border-radius: 12px;
-      padding: 13px;
+      padding: 13px 40px 13px 13px;
       margin-bottom: 10px;
       border-left: 4px solid #64748B;
       cursor: pointer;
@@ -1179,6 +1180,61 @@
     .modulo-stato-badge.s-Chiuso   { background: #16A34A; }
     .modulo-stato-badge.s-Stampato { background: #7C3AED; }
     .modulo-itinerario { font-size: 0.8rem; color: #475569; }
+    .modulo-titolo { font-size: 0.92rem; font-weight: 700; color: #1C2B3A; }
+    .modulo-sub { font-size: 0.78rem; color: #64748B; margin: 2px 0 4px; }
+    .modulo-menu {
+      position: absolute;
+      right: 6px; bottom: 6px;
+      width: 30px; height: 30px;
+      border: none; background: transparent;
+      color: #94A3B8; font-size: 1.1rem;
+      cursor: pointer; border-radius: 6px;
+    }
+    .modulo-menu:active { background: #EEF2F7; }
+
+    /* ── SWIPE lista moduli ─────────────────────────────── */
+    .swipe-riga {
+      position: relative;
+      overflow: hidden;
+      border-radius: 11px;
+      margin-bottom: 8px;
+    }
+    .swipe-riga .modulo-card {
+      position: relative;
+      margin-bottom: 0;
+      transition: transform 0.18s ease;
+      touch-action: pan-y;
+      z-index: 2;
+    }
+    .swipe-azioni {
+      position: absolute;
+      top: 0; bottom: 0;
+      display: flex;
+      align-items: stretch;
+      z-index: 1;
+    }
+    .swipe-azioni-sx { right: 0; }   /* rivelate scorrendo a sinistra */
+    .swipe-azioni-dx { left: 0; }    /* rivelate scorrendo a destra */
+    .swipe-btn {
+      border: none;
+      width: 78px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      font-size: 1.05rem;
+      color: #fff;
+      cursor: pointer;
+    }
+    .swipe-btn span { font-size: 0.66rem; font-weight: 600; }
+    .swipe-btn:disabled { opacity: 0.6; }
+    .sb-elimina   { background: #DC2626; }
+    .sb-condividi { background: #2563EB; }
+    .sb-scarica   { background: #0EA5E9; }
+    .swipe-riga.apri-sx .modulo-card { transform: translateX(-78px); }
+    .swipe-riga.apri-dx .modulo-card { transform: translateX(156px); }
+
     .modulo-catena {
       display: inline-block;
       margin-top: 5px;
@@ -4159,10 +4215,23 @@ function applicaMezzoSalvato(idx) {
 }
 
 // ── RENDER della lista moduli ──
+// Estremi dell'itinerario: primo e ultimo luogo (testo neutro se vuoti)
+function estremiItinerario(m) {
+  const partenza = (m.partenza || '').trim();
+  const tappe = (m.tappe || []).filter(t => t.luogo && t.luogo.trim()).map(t => t.luogo.trim());
+  const punti = [];
+  if (partenza) punti.push(partenza);
+  punti.push(...tappe);
+  if (punti.length === 0) return 'Itinerario da compilare';
+  if (punti.length === 1) return esc(punti[0]);
+  return esc(punti[0]) + ' → ' + esc(punti[punti.length - 1]);
+}
+
 function renderModuli() {
   document.getElementById('moduli-vista-lista').style.display = '';
   document.getElementById('moduli-editor').style.display = 'none';
   document.getElementById('moduli-anagrafica').style.display = 'none';
+  chiudiAzioniCard();
 
   const moduli = caricaModuli().sort((a, b) => b.creato - a.creato);
   const el = document.getElementById('moduli-lista');
@@ -4171,21 +4240,187 @@ function renderModuli() {
     return;
   }
   el.innerHTML = moduli.map(m => {
-    const itin = generaItinerario(m, 'sintetico') || '(itinerario vuoto)';
-    // Indicatore catena rifornimento
+    const titolo = (String(m.numero || '').trim())
+      ? 'Mod. 106 n. ' + esc(String(m.numero).trim())
+      : 'Mod. 106 senza numero';
+    const motivo = (m.motivo && m.motivo.trim()) ? esc(m.motivo.trim()) : 'Motivo da indicare';
     let catena = '';
     if (m.moduloPrecedente) catena += '<span class="modulo-catena">⛽ segue rifornimento</span>';
-    if (m.moduloSuccessivo) catena += '<span class="modulo-catena">→ continua in altro modulo</span>';
+    if (m.moduloSuccessivo) catena += '<span class="modulo-catena">⛽ continua in altro modulo</span>';
     return `
-      <div class="modulo-card s-${m.stato}" onclick="apriModulo('${m.id}')">
-        <div class="modulo-card-top">
-          <span class="modulo-data">${formattaData(dataModulo(m))}</span>
-          <span class="modulo-stato-badge s-${m.stato}">${m.stato}</span>
+      <div class="swipe-riga" data-id="${m.id}">
+        <div class="swipe-azioni swipe-azioni-dx">
+          <button class="swipe-btn sb-condividi" onclick="condividiModulo('${m.id}', this)">📤<span>Condividi</span></button>
+          <button class="swipe-btn sb-scarica" onclick="scaricaModulo('${m.id}', this)">⬇️<span>Scarica</span></button>
         </div>
-        <div class="modulo-itinerario">${esc(itin)}</div>
-        ${catena}
+        <div class="swipe-azioni swipe-azioni-sx">
+          <button class="swipe-btn sb-elimina" onclick="eliminaModulo('${m.id}')">🗑<span>Elimina</span></button>
+        </div>
+        <div class="modulo-card s-${m.stato}" onclick="tapCard(event, '${m.id}')">
+          <div class="modulo-card-top">
+            <span class="modulo-titolo">${titolo}</span>
+            <span class="modulo-stato-badge s-${m.stato}">${m.stato}</span>
+          </div>
+          <div class="modulo-sub">${formattaData(dataModulo(m))} · ${motivo}</div>
+          <div class="modulo-itinerario">${estremiItinerario(m)}</div>
+          ${catena}
+          <button class="modulo-menu" onclick="menuCard(event, '${m.id}')" title="Azioni">⋮</button>
+        </div>
       </div>`;
   }).join('');
+  attivaSwipeModuli();
+}
+
+// ── SWIPE sicuro + menu accessibile ──
+// Il gesto rivela soltanto i pulsanti: nessuna azione parte dallo swipe.
+let CARD_APERTA = null;   // elemento .swipe-riga con azioni visibili
+
+function chiudiAzioniCard() {
+  if (CARD_APERTA) {
+    CARD_APERTA.classList.remove('apri-sx', 'apri-dx');
+    CARD_APERTA = null;
+  }
+}
+
+function apriAzioniCard(riga, verso) {
+  if (CARD_APERTA && CARD_APERTA !== riga) chiudiAzioniCard();
+  riga.classList.remove('apri-sx', 'apri-dx');
+  riga.classList.add(verso === 'sx' ? 'apri-sx' : 'apri-dx');
+  CARD_APERTA = riga;
+}
+
+// Tap sulla card: se ci sono azioni aperte le chiude, altrimenti apre il modulo
+function tapCard(ev, id) {
+  if (CARD_APERTA) { ev.stopPropagation(); chiudiAzioniCard(); return; }
+  apriModulo(id);
+}
+
+// Menu ⋮ : stesse azioni senza gesto (utile da PC)
+function menuCard(ev, id) {
+  ev.stopPropagation();
+  const riga = ev.target.closest('.swipe-riga');
+  if (!riga) return;
+  if (CARD_APERTA === riga) { chiudiAzioniCard(); return; }
+  apriAzioniCard(riga, 'dx');   // mostra Condividi/Scarica; Elimina resta nello swipe sx
+}
+
+function attivaSwipeModuli() {
+  const SOGLIA = 45;      // px oltre i quali le azioni restano aperte
+  const LOCK = 10;        // px per decidere la direzione del gesto
+  document.querySelectorAll('.swipe-riga').forEach(riga => {
+    const card = riga.querySelector('.modulo-card');
+    let x0 = 0, y0 = 0, dir = null, attivo = false;
+
+    card.addEventListener('touchstart', e => {
+      if (e.touches.length !== 1) return;
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+      dir = null; attivo = true;
+      card.style.transition = 'none';
+    }, { passive: true });
+
+    card.addEventListener('touchmove', e => {
+      if (!attivo) return;
+      const dx = e.touches[0].clientX - x0;
+      const dy = e.touches[0].clientY - y0;
+      // Lock di direzione al primo movimento significativo: se prevale il
+      // verticale la gesture è scroll e lo swipe non parte mai.
+      if (dir === null) {
+        if (Math.abs(dx) < LOCK && Math.abs(dy) < LOCK) return;
+        dir = (Math.abs(dy) > Math.abs(dx)) ? 'scroll' : 'swipe';
+        if (dir === 'scroll') { attivo = false; card.style.transform = ''; return; }
+      }
+      if (dir !== 'swipe') return;
+      e.preventDefault();                       // blocco lo scroll solo qui
+      const limite = Math.max(-110, Math.min(110, dx));
+      card.style.transform = 'translateX(' + limite + 'px)';
+    }, { passive: false });
+
+    card.addEventListener('touchend', e => {
+      if (!attivo) { card.style.transform = ''; return; }
+      attivo = false;
+      card.style.transition = '';
+      card.style.transform = '';
+      if (dir !== 'swipe') return;
+      const dx = (e.changedTouches[0].clientX - x0);
+      if (dx <= -SOGLIA) apriAzioniCard(riga, 'sx');        // sinistra -> Elimina
+      else if (dx >= SOGLIA) apriAzioniCard(riga, 'dx');    // destra -> Condividi/Scarica
+      else chiudiAzioniCard();
+    });
+  });
+  // Toccando fuori o scorrendo la lista, le azioni si richiudono
+  const lista = document.getElementById('moduli-lista');
+  if (lista && !lista.dataset.chiusuraAttiva) {
+    lista.dataset.chiusuraAttiva = '1';
+    lista.addEventListener('scroll', chiudiAzioniCard, { passive: true });
+    document.addEventListener('click', ev => {
+      if (CARD_APERTA && !ev.target.closest('.swipe-riga')) chiudiAzioniCard();
+    });
+    window.addEventListener('scroll', chiudiAzioniCard, { passive: true });
+  }
+}
+
+// ── SCARICA / CONDIVIDI dalla lista ──
+let PDF_IN_CORSO = false;   // impedisce doppi tocchi e rigenerazioni inutili
+
+async function scaricaModulo(id, btn) {
+  if (PDF_IN_CORSO) return;
+  const m = caricaModuli().find(x => x.id === id);
+  if (!m) { toast('Modulo non trovato'); return; }
+  PDF_IN_CORSO = true;
+  if (btn) btn.disabled = true;
+  toast('📄 Generazione PDF...');
+  try {
+    const { blob, nomeFile } = await creaPdf106Blob(m);
+    scaricaBlob(blob, nomeFile);
+    toast('✅ PDF scaricato');
+    chiudiAzioniCard();
+  } catch (e) {
+    alert('Impossibile generare il PDF: ' + e.message);
+  } finally {
+    PDF_IN_CORSO = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function condividiModulo(id, btn) {
+  if (PDF_IN_CORSO) return;
+  const m = caricaModuli().find(x => x.id === id);
+  if (!m) { toast('Modulo non trovato'); return; }
+  PDF_IN_CORSO = true;
+  if (btn) btn.disabled = true;
+  toast('📄 Generazione PDF...');
+  let blob, nomeFile;
+  try {
+    ({ blob, nomeFile } = await creaPdf106Blob(m));
+  } catch (e) {
+    alert('Impossibile generare il PDF: ' + e.message);
+    PDF_IN_CORSO = false;
+    if (btn) btn.disabled = false;
+    return;
+  }
+  try {
+    const file = new File([blob], nomeFile, { type: 'application/pdf' });
+    const num = String(m.numero || '').trim();
+    const titolo = 'Mod. 106' + (num ? ' n. ' + num : '') + ' del ' + formattaData(dataModulo(m));
+    const testo = 'In allegato il Mod. 106' + (num ? ' n. ' + num : '') + '.';
+    if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+      try {
+        await navigator.share({ files: [file], title: titolo, text: testo });
+        chiudiAzioniCard();
+      } catch (e) {
+        // L'utente può annullare il pannello: non è un errore
+        if (e && e.name !== 'AbortError') alert('Condivisione non riuscita: ' + e.message);
+      }
+    } else {
+      // Fallback: condivisione file non supportata -> scarico il PDF
+      alert('Questo browser non supporta la condivisione di file. Scarico il PDF: potrai allegarlo manualmente.');
+      scaricaBlob(blob, nomeFile);
+      chiudiAzioniCard();
+    }
+  } finally {
+    PDF_IN_CORSO = false;
+    if (btn) btn.disabled = false;
+  }
 }
 
 // Data di riferimento del modulo (dal turno o dalla creazione)
@@ -4776,11 +5011,30 @@ function offsetModulo(dx, dy) {
 }
 
 // ── ELIMINA ──
+// Se il modulo appartiene a una catena da rifornimento avvisa in modo
+// specifico. Elimina SOLO il modulo scelto, ripulisce i riferimenti al suo
+// ID negli altri (senza ricollegare fra loro precedente e successivo) e
+// salva tutto con un solo aggiornamento dello storage.
 function eliminaModulo(id) {
-  if (!confirm('Eliminare questo Mod. 106? L\'azione non è reversibile.')) return;
-  const moduli = caricaModuli().filter(m => m.id !== id);
-  salvaModuliStorage(moduli);
+  const moduli = caricaModuli();
+  const m = moduli.find(x => x.id === id);
+  if (!m) { toast('Modulo non trovato'); return; }
+
+  const inCatena = !!(m.moduloPrecedente || m.moduloSuccessivo);
+  const msg = inCatena
+    ? 'Questo Mod. 106 appartiene a una catena generata da un rifornimento. Eliminandolo verranno rimossi i collegamenti dagli altri moduli. Confermi?'
+    : 'Eliminare questo Mod. 106? L\'azione non è reversibile.';
+  if (!confirm(msg)) return;
+
+  const restanti = moduli.filter(x => x.id !== id);
+  // Pulizia sicura dei riferimenti all'ID eliminato
+  restanti.forEach(x => {
+    if (x.moduloPrecedente === id) x.moduloPrecedente = null;
+    if (x.moduloSuccessivo === id) x.moduloSuccessivo = null;
+  });
+  salvaModuliStorage(restanti);   // un solo aggiornamento
   MODULO_CORRENTE = null;
+  chiudiAzioniCard();
   renderModuli();
   toast('🗑 Modulo eliminato');
 }
@@ -4799,27 +5053,23 @@ async function caricaPdfLib() {
   return window.PDFLib;
 }
 
-async function generaPdf106(prova) {
-  if (!prova) {
-    leggiEditorModulo();
-    salvaModuloCorrente();
-  }
-  const m = MODULO_CORRENTE;
-  toast('📄 Generazione PDF...');
+// ── GENERAZIONE PDF: funzione unica riutilizzabile ──
+// Produce il PDF del modulo passato e restituisce { blob, nomeFile },
+// SENZA avviare il download e senza toccare lo stato del modulo.
+// La usano: generaPdf106 (editor), generaPdfProva106 (calibrazione),
+// scaricaModulo e condividiModulo (lista). Unica fonte di verità.
+async function creaPdf106Blob(m) {
+  const PDFLib = await caricaPdfLib();
 
-  let PDFLib;
-  try { PDFLib = await caricaPdfLib(); }
-  catch (e) { alert('Impossibile caricare la libreria PDF. Serve la rete la prima volta.'); return; }
+  // Carica il template PDF dalla PWA
+  const resp = await fetch('./mod_106.pdf');
+  if (!resp.ok) throw new Error('template non trovato');
+  const bytes = await resp.arrayBuffer();
 
-  try {
-    // Carica il template PDF dalla PWA
-    const resp = await fetch('./mod_106.pdf');
-    if (!resp.ok) throw new Error('template non trovato');
-    const bytes = await resp.arrayBuffer();
+  const tplDoc = await PDFLib.PDFDocument.load(bytes);
+  const font = await tplDoc.embedFont(PDFLib.StandardFonts.Helvetica);
 
-    const tplDoc = await PDFLib.PDFDocument.load(bytes);
-    const font = await tplDoc.embedFont(PDFLib.StandardFonts.Helvetica);
-
+  {
     // ── 1. Scrivo i campi sulla pagina 1 del template (coord native) ──
     const tplPage = tplDoc.getPages()[0];
     const ox = m.offset.x, oy = m.offset.y;
@@ -4977,22 +5227,38 @@ async function generaPdf106(prova) {
 
     const pdfBytes = await outDoc.save();
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = prova ? 'Mod106_prova_calibrazione.pdf' : `Mod106_${dataModulo(m)}.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
+    return { blob, nomeFile: nomeFilePdf(m) };
+  }
+}
 
-    if (prova) {
-      toast('✅ PDF di prova generato');
-    } else {
-      // Aggiorna stato a Stampato
-      m.stato = 'Stampato';
-      salvaModuloCorrente();
-      toast('✅ PDF generato');
-      renderEditorModulo();
-    }
+// Nome file chiaro: Mod106_51_2026-06-23.pdf (senza numero: Mod106_2026-06-23.pdf)
+function nomeFilePdf(m) {
+  const num = String(m.numero || '').trim().replace(/[^\w-]/g, '');
+  return 'Mod106_' + (num ? num + '_' : '') + dataModulo(m) + '.pdf';
+}
+
+// Scarica un blob con nome file e libera subito l'object URL
+function scaricaBlob(blob, nomeFile) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nomeFile;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Wrapper: genera dall'editor, scarica e marca il modulo Stampato ──
+async function generaPdf106() {
+  leggiEditorModulo();
+  salvaModuloCorrente();
+  toast('📄 Generazione PDF...');
+  try {
+    const { blob, nomeFile } = await creaPdf106Blob(MODULO_CORRENTE);
+    scaricaBlob(blob, nomeFile);
+    MODULO_CORRENTE.stato = 'Stampato';
+    salvaModuloCorrente();
+    toast('✅ PDF generato');
+    renderEditorModulo();
   } catch (e) {
     alert('Errore nella generazione del PDF: ' + e.message);
   }
@@ -5142,10 +5408,10 @@ function confermaResetCal() {
   }
 }
 
-// Genera un PDF di prova con dati di esempio, usando le coordinate correnti
+// Genera un PDF di prova con dati di esempio, usando le coordinate correnti.
+// Non tocca MODULO_CORRENTE né lo stato di alcun modulo salvato.
 async function generaPdfProva106() {
-  const MODULO_BACKUP = MODULO_CORRENTE;
-  MODULO_CORRENTE = {
+  const moduloProva = {
     id: 'prova', turnoId: null, stato: 'Bozza',
     numero: '50', ufficio: 'U.P.G.S.P. - Nucleo Artificieri',
     conducente: 'Ag.Sc. PALMIERO Armando', ordineDi: 'Sig. Dirigente',
@@ -5154,14 +5420,18 @@ async function generaPdfProva106() {
     uscita: { ora: '08:00', km: '75442' },
     rientro: { ora: '15:05', km: '75464' },
     tappe: [], rapporto: { guasti: '', comunicazioni: '' },
+    rifornimento: null, moduloPrecedente: null, moduloSuccessivo: null,
     itinerarioModo: 'sintetico', offset: { x: 0, y: 0 },
     creato: Date.now(), aggiornato: Date.now()
   };
   // percorso = 75464-75442 = 22 (calcolato da percorsoKm)
+  toast('📄 Generazione PDF di prova...');
   try {
-    await generaPdf106(true);  // true = modalità prova (non salva, non cambia stato)
-  } finally {
-    MODULO_CORRENTE = MODULO_BACKUP;
+    const { blob } = await creaPdf106Blob(moduloProva);
+    scaricaBlob(blob, 'Mod106_prova_calibrazione.pdf');
+    toast('✅ PDF di prova generato');
+  } catch (e) {
+    alert('Errore nella generazione del PDF di prova: ' + e.message);
   }
 }
 
