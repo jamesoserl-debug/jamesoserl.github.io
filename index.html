@@ -434,6 +434,13 @@
       margin-top: 10px;
     }
     .modulo-allegati { background: #DBEAFE; color: #1E40AF; }
+    .pdf-completo-box {
+      margin-top: 12px;
+      padding: 11px;
+      background: #FFFBEB;
+      border: 1px solid #FDE68A;
+      border-radius: 10px;
+    }
 
     .riepilogo-sottotitolo {
       font-size: 0.72rem;
@@ -4658,7 +4665,14 @@ function renderStep5Riepilogo(m) {
       <button class="offset-btn" onclick="offsetModulo(0,-5)">▼</button>
       <button class="offset-btn" onclick="offsetModulo(5,0)">▶</button>
     </div>
-    <button class="btn btn-primary" onclick="generaPdf106()">📄 Genera Mod. 106 PDF</button>
+    <button class="btn btn-primary" onclick="generaPdf106()">📄 Scarica solo Mod. 106</button>
+    <button class="btn btn-backup" style="margin-top:8px" onclick="condividiModulo('${m.id}', this)">📤 Condividi solo Mod. 106</button>
+    ${(m.rifornimento && MODULI_CON_ALLEGATI.has(m.id)) ? `
+    <div class="pdf-completo-box">
+      <p class="imp-nota">Con le fotografie del rifornimento puoi generare il PDF completo: 3 pagine, con la copia composita di Mod. 106, scontrino e tessera.</p>
+      <button class="btn btn-primary" onclick="scaricaModuloCompleto('${m.id}', this)">⛽ Scarica Mod. 106 completo</button>
+      <button class="btn btn-backup" style="margin-top:8px" onclick="condividiModuloCompleto('${m.id}', this)">📤 Condividi Mod. 106 completo</button>
+    </div>` : ''}
     <button class="btn btn-backup" style="margin-top:8px" onclick="eliminaModulo('${m.id}')">🗑 Elimina questo modulo</button>
     <div class="wizard-nav">
       <button class="btn btn-backup" onclick="vaiStep(4)">← Indietro</button>
@@ -5631,7 +5645,15 @@ async function creaPdf106Blob(m) {
 
     const pdfBytes = await outDoc.save();
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-    return { blob, nomeFile: nomeFilePdf(m) };
+    // Restituisco anche la geometria realmente usata: serve alla pagina
+    // allegati per ritagliare l'area B5 senza riscrivere costanti.
+    // Il PDF prodotto non cambia; i chiamanti che usano {blob, nomeFile}
+    // ignorano semplicemente il campo in più.
+    return {
+      blob,
+      nomeFile: nomeFilePdf(m),
+      geometria: { a4W: A4_W, a4H: A4_H, b5W: TPL_W, b5H: TPL_H, posX: posX, posY: posY }
+    };
   }
 }
 
@@ -5641,14 +5663,210 @@ function nomeFilePdf(m) {
   return 'Mod106_' + (num ? num + '_' : '') + dataModulo(m) + '.pdf';
 }
 
-// Scarica un blob con nome file e libera subito l'object URL
+// Scarica un blob con nome file. L'object URL viene revocato con un breve
+// ritardo: revocarlo subito può far fallire il download su alcuni browser.
 function scaricaBlob(blob, nomeFile) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = nomeFile;
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+// Nome file del PDF completo: Mod106_51_2026-06-23_rifornimento.pdf
+function nomeFilePdfCompleto(m) {
+  const num = String(m.numero || '').trim().replace(/[^\w-]/g, '');
+  return 'Mod106_' + (num ? num + '_' : '') + dataModulo(m) + '_rifornimento.pdf';
+}
+
+// Adatta un elemento (lw x lh) dentro un'area mantenendo le proporzioni.
+// Una sola scala per entrambe le dimensioni: mai stiramenti.
+// ancoraggio 'alto-sx' allinea in alto a sinistra, altrimenti centra.
+function adattaInArea(lw, lh, area, ancoraggio) {
+  const s = Math.min(area.w / lw, area.h / lh);
+  const w = lw * s, h = lh * s;
+  let x = area.x + (area.w - w) / 2;
+  let y = area.y + (area.h - h) / 2;
+  if (ancoraggio === 'alto-sx') { x = area.x; y = area.y + area.h - h; }
+  return { x, y, w, h };
+}
+
+// ── PDF COMPLETO CON ALLEGATI RIFORNIMENTO ──
+// Tre pagine esatte: 1 fronte ufficiale, 2 retro ufficiale, 3 copia
+// composita (copia del fronte senza tratteggi + scontrino + tessera).
+// Il Mod. 106 ufficiale arriva SOLO da creaPdf106Blob: nessuna
+// duplicazione di template, coordinate, calibrazione o campi.
+// Non modifica lo stato del modulo né le fotografie.
+async function creaPdf106CompletoBlob(m) {
+  const PDFLib = await caricaPdfLib();
+
+  // 1. Mod. 106 ufficiale: unica fonte della grafica e dei dati
+  const ufficiale = await creaPdf106Blob(m);
+  const g = ufficiale.geometria;
+  const src = await PDFLib.PDFDocument.load(await ufficiale.blob.arrayBuffer());
+
+  // 2. Documento nuovo: pagine 1 e 2 copiate identiche dall'ufficiale
+  const out = await PDFLib.PDFDocument.create();
+  const font = await out.embedFont(PDFLib.StandardFonts.Helvetica);
+  const indici = src.getPageCount() > 1 ? [0, 1] : [0];
+  const copiate = await out.copyPages(src, indici);
+  copiate.forEach(p => out.addPage(p));
+
+  // 3. Copia del fronte: ritaglio della sola area B5.
+  //    I tratteggi stanno esattamente sul bordo destro (x = posX + b5W) e
+  //    inferiore (y = posY), con i segni angolari che sporgono lungo quei
+  //    due lati: un inset di 2pt su destra e basso li lascia fuori.
+  //    Alto e sinistro non hanno tratteggi (sono i bordi del foglio).
+  const INSET = 2;
+  const copiaFronte = await out.embedPage(src.getPages()[0], {
+    left: g.posX,
+    bottom: g.posY + INSET,
+    right: g.posX + g.b5W - INSET,
+    top: g.posY + g.b5H
+  });
+
+  // 4. Fotografie da IndexedDB: JPEG incorporati direttamente, niente base64
+  const recSc = await leggiAllegato(m.id, 'scontrino');
+  const recTe = await leggiAllegato(m.id, 'tessera');
+  let imgSc = null, imgTe = null;
+  if (recSc) {
+    try { imgSc = await out.embedJpg(await recSc.blob.arrayBuffer()); }
+    catch (e) { throw new Error('la fotografia dello scontrino non può essere incorporata nel PDF'); }
+  }
+  if (recTe) {
+    try { imgTe = await out.embedJpg(await recTe.blob.arrayBuffer()); }
+    catch (e) { throw new Error('la fotografia della tessera non può essere incorporata nel PDF'); }
+  }
+
+  // 5. Pagina 3 composita
+  const A4_W = g.a4W, A4_H = g.a4H;
+  const p3 = out.addPage([A4_W, A4_H]);
+  const grigio = PDFLib.rgb(0.62, 0.62, 0.62);
+  const MARG = 14, GAP = 10, ALT_DICITURA = 18;
+  const yBase = MARG + ALT_DICITURA;
+  const zonaW = A4_W - 2 * MARG;
+  const zonaH = (A4_H - MARG) - yBase;
+
+  // Senza tessera, lo scontrino ha una colonna più ampia
+  const frazMod = (imgSc && !imgTe) ? 0.62 : 0.70;
+  const larghMod = zonaW * frazMod;
+
+  // Zona Mod. 106: alto a sinistra, proporzioni del B5 ritagliato
+  const posMod = adattaInArea(copiaFronte.width, copiaFronte.height,
+    { x: MARG, y: yBase, w: larghMod, h: zonaH }, 'alto-sx');
+  p3.drawPage(copiaFronte, { x: posMod.x, y: posMod.y, width: posMod.w, height: posMod.h });
+  p3.drawRectangle({ x: posMod.x, y: posMod.y, width: posMod.w, height: posMod.h,
+    borderColor: grigio, borderWidth: 0.5 });
+
+  // Disegna una foto adattata nella sua area, o la dicitura se manca
+  function collocaFoto(img, area, testoMancante) {
+    if (area.w <= 0 || area.h <= 0) return;
+    if (img) {
+      const p = adattaInArea(img.width, img.height, area);
+      p3.drawImage(img, { x: p.x, y: p.y, width: p.w, height: p.h });
+      p3.drawRectangle({ x: p.x, y: p.y, width: p.w, height: p.h,
+        borderColor: grigio, borderWidth: 0.5 });
+    } else {
+      const t = testoPdfSafe(testoMancante);
+      const lw = font.widthOfTextAtSize(t, 8);
+      p3.drawText(t, {
+        x: area.x + Math.max(0, (area.w - lw) / 2),
+        y: area.y + area.h / 2,
+        size: 8, font, color: grigio
+      });
+    }
+  }
+
+  // Zona scontrino: colonna verticale a destra, tutta l'altezza
+  collocaFoto(imgSc,
+    { x: MARG + larghMod + GAP, y: yBase, w: zonaW - larghMod - GAP, h: zonaH },
+    'Fotografia scontrino non presente');
+
+  // Zona tessera: sotto il Mod. 106, in basso a sinistra
+  collocaFoto(imgTe,
+    { x: MARG, y: yBase, w: larghMod, h: posMod.y - GAP - yBase },
+    'Fotografia tessera non presente');
+
+  // Dicitura discreta nel margine inferiore
+  const num = String(m.numero || '').trim();
+  const dicitura = testoPdfSafe('Copia rifornimento — Mod. 106 ' +
+    (num ? 'n. ' + num : 'senza numero') + ' del ' + formattaData(dataModulo(m)));
+  p3.drawText(dicitura, { x: MARG, y: MARG, size: 7.5, font, color: grigio });
+
+  const bytes = await out.save();
+  return { blob: new Blob([bytes], { type: 'application/pdf' }), nomeFile: nomeFilePdfCompleto(m) };
+}
+
+// Controlla le fotografie prima di generare il PDF completo:
+// blocca se non ce n'è nessuna, avvisa se ne manca una.
+async function verificaFotoPerCompleto(m) {
+  const sc = await leggiAllegato(m.id, 'scontrino');
+  const te = await leggiAllegato(m.id, 'tessera');
+  if (!sc && !te) { alert('Non sono presenti fotografie del rifornimento.'); return false; }
+  if (!sc) return confirm('Manca la fotografia dello scontrino. Vuoi generare comunque il PDF completo?');
+  if (!te) return confirm('Manca la fotografia della tessera. Vuoi generare comunque il PDF completo?');
+  return true;
+}
+
+async function scaricaModuloCompleto(id, btn) {
+  if (PDF_IN_CORSO) return;
+  const m = caricaModuli().find(x => x.id === id);
+  if (!m) { toast('Modulo non trovato'); return; }
+  if (!(await verificaFotoPerCompleto(m))) return;
+  PDF_IN_CORSO = true;
+  if (btn) btn.disabled = true;
+  toast('📄 Generazione PDF completo...');
+  try {
+    const { blob, nomeFile } = await creaPdf106CompletoBlob(m);
+    scaricaBlob(blob, nomeFile);
+    toast('✅ PDF completo scaricato');
+  } catch (e) {
+    alert('Impossibile generare il PDF completo: ' + e.message);
+  } finally {
+    PDF_IN_CORSO = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function condividiModuloCompleto(id, btn) {
+  if (PDF_IN_CORSO) return;
+  const m = caricaModuli().find(x => x.id === id);
+  if (!m) { toast('Modulo non trovato'); return; }
+  if (!(await verificaFotoPerCompleto(m))) return;
+  if (!confirm('Il PDF contiene fotografie dello scontrino e della tessera carburante. Confermi la condivisione?')) return;
+  PDF_IN_CORSO = true;
+  if (btn) btn.disabled = true;
+  toast('📄 Generazione PDF completo...');
+  let blob, nomeFile;
+  try {
+    ({ blob, nomeFile } = await creaPdf106CompletoBlob(m));
+  } catch (e) {
+    alert('Impossibile generare il PDF completo: ' + e.message);
+    PDF_IN_CORSO = false;
+    if (btn) btn.disabled = false;
+    return;
+  }
+  try {
+    const file = new File([blob], nomeFile, { type: 'application/pdf' });
+    const num = String(m.numero || '').trim();
+    const titolo = 'Mod. 106' + (num ? ' n. ' + num : '') + ' con rifornimento';
+    const testo = 'In allegato il Mod. 106 completo della documentazione del rifornimento.';
+    if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+      try {
+        await navigator.share({ files: [file], title: titolo, text: testo });
+      } catch (e) {
+        // L'utente può annullare il pannello: non è un errore
+        if (e && e.name !== 'AbortError') alert('Condivisione non riuscita: ' + e.message);
+      }
+    } else {
+      alert('Questo browser non supporta la condivisione di file. Scarico il PDF completo: potrai allegarlo manualmente.');
+      scaricaBlob(blob, nomeFile);
+    }
+  } finally {
+    PDF_IN_CORSO = false;
+    if (btn) btn.disabled = false;
+  }
 }
 
 // ── Wrapper: genera dall'editor, scarica e marca il modulo Stampato ──
