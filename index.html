@@ -372,6 +372,69 @@
     }
     .riep-riga:last-child { border-bottom: none; }
 
+    /* ── FOTO allegate (scontrino / tessera) ──────────── */
+    .foto-sezione {
+      margin-top: 14px;
+      padding: 11px;
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 10px;
+    }
+    .foto-titolo {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #1E293B;
+      margin-bottom: 8px;
+    }
+    .foto-riga { display: flex; gap: 10px; align-items: flex-start; }
+    .foto-thumb {
+      width: 84px; height: 84px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid #CBD5E1;
+      background: #fff;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .foto-info { flex: 1; min-width: 0; }
+    .foto-meta { font-size: 0.7rem; color: #94A3B8; margin-bottom: 6px; }
+    .foto-azioni { display: flex; flex-wrap: wrap; gap: 5px; }
+    .btn-mini {
+      padding: 5px 9px;
+      font-size: 0.72rem;
+      border: 1px solid #CBD5E1;
+      border-radius: 6px;
+      background: #fff;
+      color: #334155;
+      cursor: pointer;
+    }
+    .btn-mini:active { background: #EEF2F7; }
+    .btn-mini-rosso { color: #DC2626; border-color: #FCA5A5; }
+    .foto-pulsanti { display: flex; gap: 8px; margin-top: 8px; }
+    .foto-pulsanti .btn { flex: 1; margin-top: 0; font-size: 0.8rem; }
+    .foto-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.92);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      cursor: zoom-out;
+    }
+    .foto-overlay img {
+      max-width: 100%;
+      max-height: 90%;
+      object-fit: contain;
+    }
+    .foto-overlay-nota {
+      color: #E2E8F0;
+      font-size: 0.78rem;
+      margin-top: 10px;
+    }
+    .modulo-allegati { background: #DBEAFE; color: #1E40AF; }
+
     .riepilogo-sottotitolo {
       font-size: 0.72rem;
       font-weight: 700;
@@ -1816,6 +1879,7 @@ PQ
     <button class="btn btn-backup" onclick="esportaBackup()">⬇️ Esporta backup JSON</button>
     <button class="btn btn-backup" onclick="document.getElementById('file-import').click()">⬆️ Importa backup JSON</button>
     <input type="file" id="file-import" accept=".json,application/json" style="display:none" onchange="importaBackup(event)">
+    <p class="imp-nota" style="margin-top:10px">📎 Il backup JSON non contiene le fotografie allegate (scontrini e tessere carburante): quelle restano solo su questo dispositivo.</p>
     <button class="btn btn-pericolo" onclick="cancellaTuttiIDati()">🗑 Cancella tutti i dati</button>
   </div>
 
@@ -4228,6 +4292,7 @@ function estremiItinerario(m) {
 }
 
 function renderModuli() {
+  revocaAnteprime();
   document.getElementById('moduli-vista-lista').style.display = '';
   document.getElementById('moduli-editor').style.display = 'none';
   document.getElementById('moduli-anagrafica').style.display = 'none';
@@ -4247,6 +4312,7 @@ function renderModuli() {
     let catena = '';
     if (m.moduloPrecedente) catena += '<span class="modulo-catena">⛽ segue rifornimento</span>';
     if (m.moduloSuccessivo) catena += '<span class="modulo-catena">⛽ continua in altro modulo</span>';
+    if (MODULI_CON_ALLEGATI.has(m.id)) catena += '<span class="modulo-catena modulo-allegati">📎 foto allegate</span>';
     return `
       <div class="swipe-riga" data-id="${m.id}">
         <div class="swipe-azioni swipe-azioni-dx">
@@ -4440,6 +4506,7 @@ function dataModulo(m) {
 const TITOLI_STEP = ['Apertura', 'Tappe e itinerario', 'Rifornimento', 'Chiusura finale', 'Riepilogo e PDF'];
 
 function renderEditorModulo() {
+  revocaAnteprime();   // libera gli object URL della pagina precedente
   document.getElementById('moduli-vista-lista').style.display = 'none';
   document.getElementById('moduli-anagrafica').style.display = 'none';
   const el = document.getElementById('moduli-editor');
@@ -4466,6 +4533,7 @@ function renderEditorModulo() {
     </div>`;
 
   if (step === 2) { renderTappe(); aggiornaItinAnteprima(); }
+  if (step === 3) caricaAnteprimeFoto();
 }
 
 // ── Pagina 1: Apertura ──
@@ -4592,6 +4660,265 @@ function renderStep5Riepilogo(m) {
     </div>`;
 }
 
+// ═══════════════════════════════════════════════════════════
+//  ALLEGATI FOTOGRAFICI (scontrino / tessera carburante)
+//  Le immagini NON stanno in localStorage né nel record del modulo:
+//  vivono in un database IndexedDB separato, come Blob JPEG nativi.
+//  Nel record testuale del Mod. 106 non c'è alcun riferimento: gli
+//  allegati si recuperano per moduloId. Così un backup testuale
+//  ripristinato senza immagini non può avere riferimenti rotti.
+//  Tutto locale: niente cloud, niente upload, niente OCR.
+// ═══════════════════════════════════════════════════════════
+const DB_ALLEGATI = 'turni_ps_allegati';
+const STORE_ALLEGATI = 'allegati';
+let DB_CONN = null;
+
+function apriDbAllegati() {
+  if (DB_CONN) return Promise.resolve(DB_CONN);
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) { reject(new Error('IndexedDB non disponibile')); return; }
+    const req = indexedDB.open(DB_ALLEGATI, 1);
+    req.onupgradeneeded = ev => {
+      const db = ev.target.result;
+      if (!db.objectStoreNames.contains(STORE_ALLEGATI)) {
+        const st = db.createObjectStore(STORE_ALLEGATI, { keyPath: 'id' });
+        st.createIndex('moduloId', 'moduloId', { unique: false });
+      }
+    };
+    req.onsuccess = ev => { DB_CONN = ev.target.result; resolve(DB_CONN); };
+    req.onerror = () => reject(req.error || new Error('apertura database fallita'));
+  });
+}
+
+// ID deterministico: un solo scontrino e una sola tessera per modulo.
+// La sostituzione è un put che sovrascrive: doppioni impossibili.
+function idAllegato(moduloId, tipo) { return moduloId + '_' + tipo; }
+
+function salvaAllegato(rec) {
+  return apriDbAllegati().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_ALLEGATI, 'readwrite');
+    tx.objectStore(STORE_ALLEGATI).put(rec);
+    tx.oncomplete = () => resolve(rec);
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+
+function leggiAllegato(moduloId, tipo) {
+  return apriDbAllegati().then(db => new Promise((resolve, reject) => {
+    const req = db.transaction(STORE_ALLEGATI, 'readonly')
+      .objectStore(STORE_ALLEGATI).get(idAllegato(moduloId, tipo));
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  })).catch(() => null);
+}
+
+function eliminaAllegato(moduloId, tipo) {
+  return apriDbAllegati().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_ALLEGATI, 'readwrite');
+    tx.objectStore(STORE_ALLEGATI).delete(idAllegato(moduloId, tipo));
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+
+// Tutti gli allegati di un modulo (per eliminazione e conteggio)
+function allegatiDiModulo(moduloId) {
+  return apriDbAllegati().then(db => new Promise((resolve, reject) => {
+    const req = db.transaction(STORE_ALLEGATI, 'readonly')
+      .objectStore(STORE_ALLEGATI).index('moduloId').getAll(moduloId);
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  })).catch(() => []);
+}
+
+function eliminaAllegatiDiModulo(moduloId) {
+  return apriDbAllegati().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_ALLEGATI, 'readwrite');
+    const st = tx.objectStore(STORE_ALLEGATI);
+    const req = st.index('moduloId').openKeyCursor(IDBKeyRange.only(moduloId));
+    req.onsuccess = ev => {
+      const cur = ev.target.result;
+      if (cur) { st.delete(cur.primaryKey); cur.continue(); }
+    };
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  })).catch(() => {});
+}
+
+// Insieme dei moduloId che hanno almeno un allegato: una sola query per
+// il badge 📎 della lista (niente richieste per ogni card).
+let MODULI_CON_ALLEGATI = new Set();
+function aggiornaIndiceAllegati() {
+  return apriDbAllegati().then(db => new Promise(resolve => {
+    const req = db.transaction(STORE_ALLEGATI, 'readonly')
+      .objectStore(STORE_ALLEGATI).getAllKeys();
+    req.onsuccess = () => {
+      MODULI_CON_ALLEGATI = new Set((req.result || []).map(k => String(k).replace(/_(scontrino|tessera)$/, '')));
+      resolve(MODULI_CON_ALLEGATI);
+    };
+    req.onerror = () => resolve(MODULI_CON_ALLEGATI);
+  })).catch(() => MODULI_CON_ALLEGATI);
+}
+
+// ── COMPRESSIONE ──
+// Correzione orientamento EXIF + ridimensionamento in fase di decodifica
+// (l'immagine da 12MP non viene mai materializzata intera in memoria) +
+// JPEG. JPEG e non WebP perché pdf-lib incorpora solo JPEG/PNG: serve per
+// la pagina allegati della fase 2.
+const PROFILI_FOTO = {
+  scontrino: { lato: 1600, qualita: 0.75, etichetta: 'Scontrino carburante' },
+  tessera:   { lato: 1280, qualita: 0.70, etichetta: 'Tessera carburante' }
+};
+const MAX_BYTE_FOTO = 500 * 1024;   // tetto di sicurezza: oltre, ricomprimo
+
+async function comprimiImmagine(file, tipo) {
+  const p = PROFILI_FOTO[tipo] || PROFILI_FOTO.scontrino;
+  let bitmap;
+  try {
+    // imageOrientation: 'from-image' applica l'EXIF (foto ruotate da telefono)
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch (e) {
+    // Fallback per browser vecchi (iOS < 15): niente opzioni
+    try { bitmap = await createImageBitmap(file); }
+    catch (e2) { throw new Error('Formato immagine non supportato. Prova a scattare la foto invece di sceglierla dai file.'); }
+  }
+  // Ridimensiono mantenendo le proporzioni: mai deformazioni
+  const scala = Math.min(1, p.lato / Math.max(bitmap.width, bitmap.height));
+  const w = Math.round(bitmap.width * scala), h = Math.round(bitmap.height * scala);
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  bitmap.close && bitmap.close();
+
+  let blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', p.qualita));
+  if (!blob) throw new Error('compressione non riuscita');
+  // Se resta pesante, un secondo giro a qualità più bassa
+  if (blob.size > MAX_BYTE_FOTO) {
+    const b2 = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.55));
+    if (b2 && b2.size < blob.size) blob = b2;
+  }
+  return { blob, larghezza: w, altezza: h };
+}
+
+// ── ACQUISIZIONE dal file input (fotocamera o galleria) ──
+let FOTO_IN_CORSO = false;
+
+async function acquisisciFoto(input, tipo) {
+  const file = input.files && input.files[0];
+  input.value = '';                       // permette di riscegliere lo stesso file
+  if (!file) return;
+  if (FOTO_IN_CORSO) return;
+  if (!MODULO_CORRENTE) return;
+  FOTO_IN_CORSO = true;
+  toast('📷 Elaborazione foto...');
+  try {
+    const { blob, larghezza, altezza } = await comprimiImmagine(file, tipo);
+    await salvaAllegato({
+      id: idAllegato(MODULO_CORRENTE.id, tipo),
+      moduloId: MODULO_CORRENTE.id,
+      tipo: tipo,
+      blob: blob,
+      mime: 'image/jpeg',
+      creato: Date.now(),
+      dimensione: blob.size,
+      larghezza: larghezza,
+      altezza: altezza,
+      nomeFile: file.name || (tipo + '.jpg')
+    });
+    MODULI_CON_ALLEGATI.add(MODULO_CORRENTE.id);
+    toast('✅ Foto salvata (' + Math.round(blob.size / 1024) + ' KB)');
+    renderEditorModulo();
+  } catch (e) {
+    alert('Impossibile salvare la foto: ' + e.message);
+  } finally {
+    FOTO_IN_CORSO = false;
+  }
+}
+
+async function confermaEliminaFoto(tipo) {
+  const p = PROFILI_FOTO[tipo];
+  const extra = (tipo === 'tessera')
+    ? '\n\nLa foto della tessera contiene dati sensibili e verrà cancellata definitivamente dal dispositivo.'
+    : '';
+  if (!confirm('Eliminare la fotografia "' + p.etichetta + '"?' + extra)) return;
+  try {
+    await eliminaAllegato(MODULO_CORRENTE.id, tipo);
+    const restanti = await allegatiDiModulo(MODULO_CORRENTE.id);
+    if (!restanti.length) MODULI_CON_ALLEGATI.delete(MODULO_CORRENTE.id);
+    toast('🗑 Foto eliminata');
+    renderEditorModulo();
+  } catch (e) {
+    alert('Impossibile eliminare la foto: ' + e.message);
+  }
+}
+
+// ── ANTEPRIME ──
+// Gli object URL delle anteprime vengono revocati quando si lascia la
+// pagina, per non accumulare memoria.
+let URL_ANTEPRIME = [];
+function revocaAnteprime() {
+  URL_ANTEPRIME.forEach(u => URL.revokeObjectURL(u));
+  URL_ANTEPRIME = [];
+}
+
+// Carica le anteprime nelle due sezioni (chiamata dopo il render della pagina 3)
+async function caricaAnteprimeFoto() {
+  if (!MODULO_CORRENTE) return;
+  for (const tipo of ['scontrino', 'tessera']) {
+    const box = document.getElementById('foto-box-' + tipo);
+    if (!box) continue;
+    const rec = await leggiAllegato(MODULO_CORRENTE.id, tipo);
+    if (!rec) continue;
+    const url = URL.createObjectURL(rec.blob);
+    URL_ANTEPRIME.push(url);
+    const kb = Math.round(rec.dimensione / 1024);
+    box.innerHTML = `
+      <div class="foto-riga">
+        <img class="foto-thumb" src="${url}" alt="${PROFILI_FOTO[tipo].etichetta}" onclick="apriFotoIntera('${tipo}')">
+        <div class="foto-info">
+          <div class="foto-meta">${rec.larghezza}×${rec.altezza} px · ${kb} KB</div>
+          <div class="foto-azioni">
+            <button class="btn-mini" onclick="apriFotoIntera('${tipo}')">🔍 Apri</button>
+            <button class="btn-mini" onclick="document.getElementById('inp-cam-${tipo}').click()">🔄 Sostituisci</button>
+            <button class="btn-mini btn-mini-rosso" onclick="confermaEliminaFoto('${tipo}')">🗑 Elimina</button>
+          </div>
+        </div>
+      </div>`;
+  }
+}
+
+// Visore a schermo intero
+async function apriFotoIntera(tipo) {
+  const rec = await leggiAllegato(MODULO_CORRENTE.id, tipo);
+  if (!rec) return;
+  const url = URL.createObjectURL(rec.blob);
+  const ov = document.createElement('div');
+  ov.className = 'foto-overlay';
+  ov.innerHTML = `<img src="${url}" alt="${PROFILI_FOTO[tipo].etichetta}">
+    <div class="foto-overlay-nota">${PROFILI_FOTO[tipo].etichetta} — tocca per chiudere</div>`;
+  ov.onclick = () => { document.body.removeChild(ov); URL.revokeObjectURL(url); };
+  document.body.appendChild(ov);
+}
+
+// Sezione fotografica (una per tipo) dentro la pagina Rifornimento
+function renderSezioneFoto(tipo) {
+  const p = PROFILI_FOTO[tipo];
+  return `
+    <div class="foto-sezione">
+      <div class="foto-titolo">📷 ${p.etichetta}</div>
+      <div id="foto-box-${tipo}">
+        <p class="imp-nota">Nessuna fotografia.</p>
+      </div>
+      <div class="foto-pulsanti">
+        <button class="btn btn-backup" onclick="document.getElementById('inp-cam-${tipo}').click()">📷 Scatta foto</button>
+        <button class="btn btn-backup" onclick="document.getElementById('inp-gal-${tipo}').click()">🖼 Scegli dalla galleria</button>
+      </div>
+      <input type="file" id="inp-cam-${tipo}" accept="image/*" capture="environment" style="display:none" onchange="acquisisciFoto(this,'${tipo}')">
+      <input type="file" id="inp-gal-${tipo}" accept="image/*" style="display:none" onchange="acquisisciFoto(this,'${tipo}')">
+    </div>`;
+}
+
 // ── RIFORNIMENTO (pagina 3 del wizard) ──
 // Due scelte chiare: A) nessun rifornimento -> si procede alla chiusura;
 // B) rifornimento effettuato -> campi + eventuale divisione del modulo.
@@ -4637,6 +4964,8 @@ function renderRifornimento(m) {
     <div class="campo"><label>Km al rifornimento</label><input type="text" inputmode="numeric" id="rif-km" value="${esc(r.km)}"></div>
     <div class="campo"><label>N° tessera carburante (opzionale)</label><input type="text" id="rif-tessera" placeholder="es. 123456" value="${esc(r.tessera || '')}"></div>
     <div class="campo"><label>Note</label><input type="text" id="rif-note" value="${esc(r.note)}"></div>
+    ${renderSezioneFoto('scontrino')}
+    ${renderSezioneFoto('tessera')}
     ${modificabile ? `<button class="btn btn-backup" onclick="eliminaRifornimento()">🗑 Elimina rifornimento (torna a "Nessun rifornimento")</button>` : ''}
     ${modificabile && !m.moduloSuccessivo ? `
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid #E2E8F0">
@@ -5015,14 +5344,18 @@ function offsetModulo(dx, dy) {
 // specifico. Elimina SOLO il modulo scelto, ripulisce i riferimenti al suo
 // ID negli altri (senza ricollegare fra loro precedente e successivo) e
 // salva tutto con un solo aggiornamento dello storage.
-function eliminaModulo(id) {
+async function eliminaModulo(id) {
   const moduli = caricaModuli();
   const m = moduli.find(x => x.id === id);
   if (!m) { toast('Modulo non trovato'); return; }
 
   const inCatena = !!(m.moduloPrecedente || m.moduloSuccessivo);
-  const msg = inCatena
-    ? 'Questo Mod. 106 appartiene a una catena generata da un rifornimento. Eliminandolo verranno rimossi i collegamenti dagli altri moduli. Confermi?'
+  const foto = await allegatiDiModulo(id);
+  const parti = [];
+  if (inCatena) parti.push('Questo Mod. 106 appartiene a una catena generata da un rifornimento. Eliminandolo verranno rimossi i collegamenti dagli altri moduli.');
+  if (foto.length) parti.push('Questo Mod. 106 ha ' + foto.length + (foto.length === 1 ? ' fotografia allegata che verrà eliminata definitivamente.' : ' fotografie allegate che verranno eliminate definitivamente.'));
+  const msg = parti.length
+    ? parti.join('\n\n') + '\n\nConfermi?'
     : 'Eliminare questo Mod. 106? L\'azione non è reversibile.';
   if (!confirm(msg)) return;
 
@@ -5033,6 +5366,9 @@ function eliminaModulo(id) {
     if (x.moduloSuccessivo === id) x.moduloSuccessivo = null;
   });
   salvaModuliStorage(restanti);   // un solo aggiornamento
+  // Rimuovo anche i blob: niente immagini orfane
+  await eliminaAllegatiDiModulo(id);
+  MODULI_CON_ALLEGATI.delete(id);
   MODULO_CORRENTE = null;
   chiudiAzioniCard();
   renderModuli();
@@ -6011,6 +6347,12 @@ function selezionaStatoTurno(val) {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+  // Indice dei moduli con foto allegate (per il badge 📎 nella lista)
+  aggiornaIndiceAllegati().then(() => {
+    const lista = document.getElementById('moduli-lista');
+    if (lista && lista.innerHTML.trim()) renderModuli();
+  });
+
   // Imposta la data di oggi nel form
   document.getElementById('campo-data').value = oggiISO();
 
