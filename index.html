@@ -319,24 +319,58 @@
     .btn-modifica { background: #EFF6FF; color: #2563EB; }
     .btn-elimina  { background: #FEF2F2; color: #DC2626; }
 
-    /* ── RIEPILOGO ────────────────────────────────────── */
-    .riepilogo-grande {
-      text-align: center;
-      padding: 16px 0 14px;
-      border-bottom: 1px solid #EEF2F7;
-      margin-bottom: 14px;
+    /* ── WIZARD Mod. 106 ─────────────────────────────── */
+    .wizard-indicatore {
+      margin-top: 8px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #2563EB;
     }
-    .numero-grande {
-      font-size: 2.8rem;
-      font-weight: 800;
-      color: #1C2B3A;
-      line-height: 1;
+    .wizard-avviso {
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: #FEF3C7;
+      color: #92400E;
+      border-radius: 9px;
+      font-size: 0.82rem;
     }
-    .numero-grande-label {
-      font-size: 0.8rem;
-      color: #8695A6;
-      margin-top: 4px;
+    .wizard-nav {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid #EEF2F7;
     }
+    .wizard-nav .btn { flex: 1; margin-top: 0; }
+    .rif-partenza-opzioni {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 9px;
+      padding: 10px;
+    }
+    .rif-radio {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: #1E293B;
+    }
+    .riep-modulo {
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 9px;
+      padding: 10px 12px;
+    }
+    .riep-riga {
+      font-size: 0.82rem;
+      color: #334155;
+      padding: 4px 0;
+      border-bottom: 1px dashed #E2E8F0;
+    }
+    .riep-riga:last-child { border-bottom: none; }
 
     .riepilogo-sottotitolo {
       font-size: 0.72rem;
@@ -3970,10 +4004,9 @@ function nuovoModulo(turnoId) {
   }
 
   // Mezzo predefinito dalla lista mezzi (se impostato)
-  let mezzoNome = ana.mezzo || 'Autovettura', mezzoTarga = ana.targa || '', mezzoTipo = 'Autovettura', mezzoModello = '';
+  let mezzoTarga = ana.targa || '', mezzoTipo = 'Autovettura', mezzoModello = '';
   if (ana.mezzi && ana.mezzi.length && ana.mezzoDefault >= 0 && ana.mezzi[ana.mezzoDefault]) {
     const md = ana.mezzi[ana.mezzoDefault];
-    mezzoNome = md.nome || mezzoNome;
     mezzoTarga = md.targa || '';
     mezzoTipo = md.tipo || 'Autovettura';
     mezzoModello = md.modello || '';
@@ -3989,6 +4022,7 @@ function nuovoModulo(turnoId) {
     turnoId: turnoId || null,
     stato: 'Aperto',
     numero: '',
+    data: data,
     ufficio: ana.ufficio || '',
     conducente: ana.conducente,
     ordineDi: ordineDiVal,
@@ -4009,17 +4043,59 @@ function nuovoModulo(turnoId) {
     creato: Date.now(),
     aggiornato: Date.now()
   };
-  // Salva subito (così appare in lista) e apre l'editor
+  // Salva subito (così appare in lista) e apre l'editor alla pagina 1
   const moduli = caricaModuli();
   moduli.push(MODULO_CORRENTE);
   salvaModuliStorage(moduli);
+  MODULO_STEP_CORRENTE = 1;
+  MODULO_AVVISO = '';
   renderEditorModulo();
 }
 
 // ── Apre un modulo esistente ──
+// Stato UI del wizard: pagina visibile (1-5). Non viene salvato nel backup:
+// si ricava sempre dallo stato del modulo.
+let MODULO_STEP_CORRENTE = 1;
+// Messaggio da evidenziare all'apertura (es. dopo divisione al rifornimento)
+let MODULO_AVVISO = '';
+
+// Sceglie la pagina sensata in base allo stato del modulo:
+//  1. Chiuso/Stampato -> 5 (riepilogo)
+//  2. uscita incompleta -> 1
+//  3. rifornimento presente e non ancora diviso -> 3 (va deciso lì)
+//  4. rientro già compilato -> 4 (manca solo chiudere)
+//  5. altrimenti -> 2 (servizio in corso: tappe)
+function stepIniziale(m) {
+  if (m.stato === 'Chiuso' || m.stato === 'Stampato') return 5;
+  if (!m.uscita.ora || !m.uscita.km) return 1;
+  if (m.rifornimento && !m.moduloSuccessivo) return 3;
+  if (m.rientro.ora || m.rientro.km) return 4;
+  return 2;
+}
+
 function apriModulo(id) {
   MODULO_CORRENTE = caricaModuli().find(m => m.id === id);
   if (!MODULO_CORRENTE) { toast('Modulo non trovato'); return; }
+  MODULO_STEP_CORRENTE = stepIniziale(MODULO_CORRENTE);
+  MODULO_AVVISO = '';
+  renderEditorModulo();
+}
+
+// Navigazione del wizard: salva la pagina corrente, valida se serve,
+// poi passa alla pagina richiesta. Tornando indietro non si perde nulla
+// perché ogni cambio pagina salva prima.
+function vaiStep(n) {
+  leggiEditorModulo();
+  // Validazione in uscita dalla pagina 1 (solo andando avanti)
+  if (MODULO_STEP_CORRENTE === 1 && n > 1) {
+    if (!MODULO_CORRENTE.uscita.ora || !MODULO_CORRENTE.uscita.km) {
+      alert('Per procedere servono l\'ora di uscita e i km di uscita (contachilometri).');
+      return;
+    }
+  }
+  salvaModuloCorrente();
+  MODULO_AVVISO = '';
+  MODULO_STEP_CORRENTE = Math.max(1, Math.min(5, n));
   renderEditorModulo();
 }
 
@@ -4035,27 +4111,36 @@ function salvaModuloCorrente() {
 }
 
 // ── Legge i campi dell'editor nel modulo corrente ──
+// NULL-SAFE per il wizard a pagine: ogni campo viene assegnato SOLO se il
+// suo elemento esiste nel DOM in questo momento (cioè solo i campi della
+// pagina visibile). Così è sicura da chiamare da qualsiasi step senza
+// azzerare i dati delle altre pagine.
 function leggiEditorModulo() {
   if (!MODULO_CORRENTE) return;
-  const g = id => { const e = document.getElementById(id); return e ? e.value : ''; };
-  MODULO_CORRENTE.numero = g('mod-numero');
-  MODULO_CORRENTE.ufficio = g('mod-ufficio');
-  MODULO_CORRENTE.conducente = g('mod-conducente');
-  MODULO_CORRENTE.ordineDi = g('mod-ordinedi');
-  MODULO_CORRENTE.modello = g('mod-modello');
-  MODULO_CORRENTE.targa = g('mod-targa');
-  MODULO_CORRENTE.mezzo = g('mod-mezzo');
-  MODULO_CORRENTE.motivo = g('mod-motivo');
-  MODULO_CORRENTE.partenza = g('mod-partenza');
-  // Normalizzo gli orari; se non validi li lascio vuoti (non bloccante per il modulo)
-  const uOra = normalizzaOra(g('mod-uscita-ora'));
-  MODULO_CORRENTE.uscita.ora = (uOra === null) ? '' : uOra;
-  MODULO_CORRENTE.uscita.km = g('mod-uscita-km');
-  const rOra = normalizzaOra(g('mod-rientro-ora'));
-  MODULO_CORRENTE.rientro.ora = (rOra === null) ? '' : rOra;
-  MODULO_CORRENTE.rientro.km = g('mod-rientro-km');
-  MODULO_CORRENTE.rapporto.guasti = g('mod-guasti');
-  MODULO_CORRENTE.rapporto.comunicazioni = g('mod-comunicazioni');
+  const g = id => { const e = document.getElementById(id); return e ? e.value : null; };
+  const set = (id, fn) => { const v = g(id); if (v !== null) fn(v); };
+
+  // Pagina 1 - Apertura
+  set('mod-data',       v => MODULO_CORRENTE.data = v);
+  set('mod-numero',     v => MODULO_CORRENTE.numero = v);
+  set('mod-ufficio',    v => MODULO_CORRENTE.ufficio = v);
+  set('mod-conducente', v => MODULO_CORRENTE.conducente = v);
+  set('mod-ordinedi',   v => MODULO_CORRENTE.ordineDi = v);
+  set('mod-modello',    v => MODULO_CORRENTE.modello = v);
+  set('mod-targa',      v => MODULO_CORRENTE.targa = v);
+  set('mod-mezzo',      v => MODULO_CORRENTE.mezzo = v);
+  set('mod-motivo',     v => MODULO_CORRENTE.motivo = v);
+  set('mod-partenza',   v => MODULO_CORRENTE.partenza = v);
+  set('mod-uscita-ora', v => { const n = normalizzaOra(v); MODULO_CORRENTE.uscita.ora = (n === null) ? '' : n; });
+  set('mod-uscita-km',  v => MODULO_CORRENTE.uscita.km = v);
+
+  // Pagina 4 - Chiusura
+  set('mod-rientro-ora', v => { const n = normalizzaOra(v); MODULO_CORRENTE.rientro.ora = (n === null) ? '' : n; });
+  set('mod-rientro-km',  v => MODULO_CORRENTE.rientro.km = v);
+  set('mod-guasti',      v => MODULO_CORRENTE.rapporto.guasti = v);
+  set('mod-comunicazioni', v => MODULO_CORRENTE.rapporto.comunicazioni = v);
+
+  // Pagina 3 - Rifornimento (già null-safe al suo interno)
   leggiRifornimentoUI();
 }
 
@@ -4094,7 +4179,7 @@ function renderModuli() {
     return `
       <div class="modulo-card s-${m.stato}" onclick="apriModulo('${m.id}')">
         <div class="modulo-card-top">
-          <span class="modulo-data">${formattaData(m.uscitaData || dataModulo(m))}</span>
+          <span class="modulo-data">${formattaData(dataModulo(m))}</span>
           <span class="modulo-stato-badge s-${m.stato}">${m.stato}</span>
         </div>
         <div class="modulo-itinerario">${esc(itin)}</div>
@@ -4104,7 +4189,10 @@ function renderModuli() {
 }
 
 // Data di riferimento del modulo (dal turno o dalla creazione)
+// Data di riferimento del modulo: campo esplicito se presente (modificabile
+// in pagina 1), altrimenti fallback dal turno o dalla creazione (moduli vecchi)
 function dataModulo(m) {
+  if (m.data) return m.data;
   if (m.turnoId) {
     const t = caricaTurni().find(x => x.id === m.turnoId);
     if (t) return t.data;
@@ -4112,18 +4200,43 @@ function dataModulo(m) {
   return new Date(m.creato).toISOString().slice(0, 10);
 }
 
-// ── RENDER dell'editor (wizard) ──
+// ── RENDER dell'editor: WIZARD a 5 pagine, una visibile per volta ──
+// 1 Apertura · 2 Tappe/Itinerario · 3 Rifornimento · 4 Chiusura · 5 Riepilogo+PDF
+const TITOLI_STEP = ['Apertura', 'Tappe e itinerario', 'Rifornimento', 'Chiusura finale', 'Riepilogo e PDF'];
+
 function renderEditorModulo() {
   document.getElementById('moduli-vista-lista').style.display = 'none';
   document.getElementById('moduli-anagrafica').style.display = 'none';
   const el = document.getElementById('moduli-editor');
   el.style.display = '';
   const m = MODULO_CORRENTE;
+  const step = MODULO_STEP_CORRENTE;
 
+  let contenuto = '';
+  if (step === 1) contenuto = renderStep1Apertura(m);
+  else if (step === 2) contenuto = renderStep2Tappe(m);
+  else if (step === 3) contenuto = renderStep3Rifornimento(m);
+  else if (step === 4) contenuto = renderStep4Chiusura(m);
+  else contenuto = renderStep5Riepilogo(m);
+
+  el.innerHTML = `
+    <div class="card">
+      <button class="btn btn-backup" onclick="leggiEditorModulo();salvaModuloCorrente();renderModuli()">← Salva e torna alla lista</button>
+      <div class="card-titolo" style="margin-top:10px">📄 Mod. 106 · <span class="modulo-stato-badge s-${m.stato}">${m.stato}</span></div>
+      <div class="wizard-indicatore">Passaggio ${step} di 5 · ${TITOLI_STEP[step - 1]}</div>
+      ${MODULO_AVVISO ? `<div class="wizard-avviso">${esc(MODULO_AVVISO)}</div>` : ''}
+    </div>
+    <div class="wizard-step">
+      ${contenuto}
+    </div>`;
+
+  if (step === 2) { renderTappe(); aggiornaItinAnteprima(); }
+}
+
+// ── Pagina 1: Apertura ──
+function renderStep1Apertura(m) {
   const mezzi = ['Autovettura','Autocarro','Motoveicolo','Natante']
     .map(x => `<option value="${x}"${m.mezzo===x?' selected':''}>${x}</option>`).join('');
-
-  // Selettore rapido dei mezzi salvati in anagrafica
   const ana = caricaAnagrafica();
   const selMezzi = (ana.mezzi && ana.mezzi.length)
     ? `<div class="campo"><label>Scegli mezzo salvato</label>
@@ -4132,7 +4245,6 @@ function renderEditorModulo() {
           ${ana.mezzi.map((mz, i) => `<option value="${i}">${esc(mz.nome)} · ${esc(mz.targa)} (${esc(mz.tipo)})</option>`).join('')}
         </select></div>`
     : '';
-  // Selettore rapido dei "per ordine di" salvati
   const selOrdini = (ana.ordiniDi && ana.ordiniDi.length)
     ? `<div class="campo"><label>Scegli "per ordine di"</label>
         <select id="mod-sel-ordine" onchange="if(this.value!==''){document.getElementById('mod-ordinedi').value=this.value}">
@@ -4140,85 +4252,141 @@ function renderEditorModulo() {
           ${ana.ordiniDi.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}
         </select></div>`
     : '';
-
-  el.innerHTML = `
-    <div class="card">
-      <button class="btn btn-backup" onclick="leggiEditorModulo();salvaModuloCorrente();renderModuli()">← Torna alla lista</button>
-      <div class="card-titolo" style="margin-top:10px">📄 Mod. 106 · <span class="modulo-stato-badge s-${m.stato}">${m.stato}</span></div>
-    </div>
-
-    <div class="wizard-step">
-      <div class="wizard-step-titolo">1 · Apertura</div>
-      <div class="campo"><label>Ufficio / reparto</label><input type="text" id="mod-ufficio" value="${esc(m.ufficio||'')}"></div>
-      <div class="campo"><label>N. progressivo</label><input type="text" id="mod-numero" value="${esc(m.numero)}"></div>
-      <div class="campo"><label>Conducente</label><input type="text" id="mod-conducente" value="${esc(m.conducente)}"></div>
-      ${selOrdini}
-      <div class="campo"><label>Per ordine di</label><input type="text" id="mod-ordinedi" value="${esc(m.ordineDi)}"></div>
-      ${selMezzi}
-      <div class="campo"><label>Modello mezzo</label><input type="text" id="mod-modello" value="${esc(m.modello||'')}"></div>
-      <div class="campo"><label>Targa</label><input type="text" id="mod-targa" value="${esc(m.targa)}"></div>
-      <div class="campo"><label>Tipo mezzo</label><select id="mod-mezzo">${mezzi}</select></div>
-      <div class="campo"><label>Motivo del servizio</label><input type="text" id="mod-motivo" value="${esc(m.motivo)}"></div>
-      <div class="campo"><label>Partenza</label><input type="text" id="mod-partenza" value="${esc(m.partenza)}"></div>
+  return `
+    <div class="wizard-step-titolo">1 · Apertura</div>
+    <div class="campo"><label>Data</label><input type="date" id="mod-data" value="${esc(dataModulo(m))}"></div>
+    <div class="campo"><label>N. progressivo</label><input type="text" id="mod-numero" value="${esc(m.numero)}"></div>
+    <div class="campo"><label>Ufficio / reparto</label><input type="text" id="mod-ufficio" value="${esc(m.ufficio||'')}"></div>
+    <div class="campo"><label>Conducente</label><input type="text" id="mod-conducente" value="${esc(m.conducente)}"></div>
+    ${selOrdini}
+    <div class="campo"><label>Per ordine di</label><input type="text" id="mod-ordinedi" value="${esc(m.ordineDi)}"></div>
+    ${selMezzi}
+    <div class="campo"><label>Tipo mezzo</label><select id="mod-mezzo">${mezzi}</select></div>
+    <div class="campo"><label>Modello mezzo</label><input type="text" id="mod-modello" value="${esc(m.modello||'')}"></div>
+    <div class="campo"><label>Targa</label><input type="text" id="mod-targa" value="${esc(m.targa)}"></div>
+    <div class="campo"><label>Motivo del servizio</label><input type="text" id="mod-motivo" value="${esc(m.motivo)}"></div>
+    <div class="campo"><label>Sede / luogo di partenza</label><input type="text" id="mod-partenza" value="${esc(m.partenza)}"></div>
+    <div class="riga-due">
       <div class="campo"><label>Ora uscita</label><input type="text" inputmode="numeric" id="mod-uscita-ora" placeholder="HH:MM" value="${m.uscita.ora}" onblur="gestisciInputOra(this)"></div>
-      <div class="campo"><label>Km uscita (contachilometri)</label><input type="text" inputmode="numeric" id="mod-uscita-km" value="${esc(m.uscita.km)}"></div>
+      <div class="campo"><label>Km uscita</label><input type="text" inputmode="numeric" id="mod-uscita-km" value="${esc(m.uscita.km)}"></div>
     </div>
-
-    <div class="wizard-step">
-      <div class="wizard-step-titolo">2 · Tappe</div>
-      <div id="tappe-lista"></div>
-      <button class="btn btn-primary" onclick="aggiungiTappa()">➕ Aggiungi tappa</button>
-      <div class="itinerario-scelta">
-        <button class="itin-opt ${m.itinerarioModo==='sintetico'?'attivo':''}" onclick="setItinModo('sintetico')">Sintetico</button>
-        <button class="itin-opt ${m.itinerarioModo==='dettagliato'?'attivo':''}" onclick="setItinModo('dettagliato')">Dettagliato</button>
-      </div>
-      <div style="font-size:0.78rem;color:#64748B;margin-top:6px" id="itin-anteprima"></div>
-    </div>
-
-    <div class="wizard-step">
-      <div class="wizard-step-titolo">3 · Chiusura</div>
-      <div class="campo"><label>Ora rientro</label><input type="text" inputmode="numeric" id="mod-rientro-ora" placeholder="HH:MM" value="${m.rientro.ora}" onblur="gestisciInputOra(this)"></div>
-      <div class="campo"><label>Km rientro (contachilometri)</label><input type="text" inputmode="numeric" id="mod-rientro-km" value="${esc(m.rientro.km)}" oninput="aggiornaPercorso()"></div>
-      <div class="campo"><label>Percorso Km (calcolato)</label><input type="text" id="mod-percorso" value="${percorsoKm(m)}" readonly style="background:#EEF2F7"></div>
-      <div class="campo"><label>Guasti / incidenti</label><input type="text" id="mod-guasti" value="${esc(m.rapporto.guasti)}"></div>
-      <div class="campo"><label>Comunicazioni del conducente</label><input type="text" id="mod-comunicazioni" value="${esc(m.rapporto.comunicazioni)}"></div>
-      <button class="btn btn-primary" onclick="chiudiModulo()">🏁 Chiudi modulo (rientro ${esc(m.partenza)})</button>
-    </div>
-
-    <div class="wizard-step">
-      <div class="wizard-step-titolo">4 · Rifornimento</div>
-      ${renderRifornimento(m)}
-    </div>
-
-    <div class="wizard-step">
-      <div class="wizard-step-titolo">5 · Genera PDF</div>
-      <p style="font-size:0.8rem;color:#64748B;margin-bottom:8px">Regola l'allineamento se sulla tua stampante il testo non è centrato:</p>
-      <div class="modulo-offset">
-        <button class="offset-btn" onclick="offsetModulo(-5,0)">◀</button>
-        <button class="offset-btn" onclick="offsetModulo(0,5)">▲</button>
-        <span class="offset-val">x:${m.offset.x} y:${m.offset.y}</span>
-        <button class="offset-btn" onclick="offsetModulo(0,-5)">▼</button>
-        <button class="offset-btn" onclick="offsetModulo(5,0)">▶</button>
-      </div>
-      <button class="btn btn-primary" onclick="generaPdf106()">📄 Genera Mod. 106 PDF</button>
-      <button class="btn btn-backup" style="margin-top:8px" onclick="eliminaModulo('${m.id}')">🗑 Elimina questo modulo</button>
+    <div class="wizard-nav">
+      <button class="btn btn-primary" onclick="vaiStep(2)">Procedi alle tappe →</button>
     </div>`;
-
-  renderTappe();
-  aggiornaItinAnteprima();
 }
 
-// ── RIFORNIMENTO ──
-// Disegna la sezione rifornimento dell'editor: pulsante "Aggiungi" se vuoto,
-// oppure i campi compilabili se il rifornimento esiste.
+// ── Pagina 2: Tappe e itinerario ──
+function renderStep2Tappe(m) {
+  return `
+    <div class="wizard-step-titolo">2 · Tappe e itinerario</div>
+    <div id="tappe-lista"></div>
+    <button class="btn btn-primary" onclick="aggiungiTappa()">➕ Aggiungi tappa</button>
+    <div class="itinerario-scelta">
+      <button class="itin-opt ${m.itinerarioModo==='sintetico'?'attivo':''}" onclick="setItinModo('sintetico')">Sintetico</button>
+      <button class="itin-opt ${m.itinerarioModo==='dettagliato'?'attivo':''}" onclick="setItinModo('dettagliato')">Dettagliato</button>
+    </div>
+    <div style="font-size:0.78rem;color:#64748B;margin-top:6px" id="itin-anteprima"></div>
+    <div class="wizard-nav">
+      <button class="btn btn-backup" onclick="vaiStep(1)">← Indietro</button>
+      <button class="btn btn-primary" onclick="vaiStep(3)">Procedi al rifornimento →</button>
+    </div>`;
+}
+
+// ── Pagina 3: Rifornimento (con eventuale divisione del modulo) ──
+function renderStep3Rifornimento(m) {
+  return `
+    <div class="wizard-step-titolo">3 · Rifornimento</div>
+    ${renderRifornimento(m)}
+    <div class="wizard-nav">
+      <button class="btn btn-backup" onclick="vaiStep(2)">← Indietro</button>
+    </div>`;
+}
+
+// ── Pagina 4: Chiusura finale (rientro vero, nessun nuovo modulo) ──
+function renderStep4Chiusura(m) {
+  return `
+    <div class="wizard-step-titolo">4 · Chiusura finale</div>
+    <p class="imp-nota">Rientro finale del servizio. La chiusura normale non crea nessun nuovo modulo.</p>
+    <div class="riga-due">
+      <div class="campo"><label>Ora rientro</label><input type="text" inputmode="numeric" id="mod-rientro-ora" placeholder="HH:MM" value="${m.rientro.ora}" onblur="gestisciInputOra(this)"></div>
+      <div class="campo"><label>Km rientro</label><input type="text" inputmode="numeric" id="mod-rientro-km" value="${esc(m.rientro.km)}" oninput="aggiornaPercorso()"></div>
+    </div>
+    <div class="campo"><label>Percorso Km (calcolato)</label><input type="text" id="mod-percorso" value="${percorsoKm(m)}" readonly style="background:#EEF2F7"></div>
+    <div class="campo"><label>Guasti / incidenti</label><input type="text" id="mod-guasti" value="${esc(m.rapporto.guasti)}"></div>
+    <div class="campo"><label>Comunicazioni del conducente</label><input type="text" id="mod-comunicazioni" value="${esc(m.rapporto.comunicazioni)}"></div>
+    <button class="btn btn-primary" onclick="chiudiModulo()">🏁 Chiudi definitivamente il modulo (rientro ${esc(m.partenza)})</button>
+    <div class="wizard-nav">
+      <button class="btn btn-backup" onclick="vaiStep(3)">← Indietro</button>
+      <button class="btn btn-backup" onclick="vaiStep(5)">Riepilogo →</button>
+    </div>`;
+}
+
+// ── Pagina 5: Riepilogo e PDF ──
+function renderStep5Riepilogo(m) {
+  const itin = generaItinerario(m, m.itinerarioModo) || '(itinerario vuoto)';
+  const r = m.rifornimento;
+  const righeRif = r
+    ? `⛽ ${esc(r.tipo)} ${esc(r.litri)} L${r.ora ? ' · ore ' + esc(r.ora) : ''}${r.km ? ' · km ' + esc(r.km) : ''}${r.tessera ? ' · tessera ' + esc(r.tessera) : ''}`
+    : 'Nessun rifornimento';
+  const catena = [];
+  if (m.moduloPrecedente) catena.push('⛽ Nato da un rifornimento (segue un modulo precedente)');
+  if (m.moduloSuccessivo) catena.push('→ Continua in un modulo successivo');
+  return `
+    <div class="wizard-step-titolo">5 · Riepilogo e PDF</div>
+    <div class="riep-modulo">
+      <div class="riep-riga"><b>Apertura</b> — ${esc(m.conducente)} · ${esc(m.modello)} ${esc(m.targa)} · ore ${esc(m.uscita.ora)} km ${esc(m.uscita.km)}</div>
+      <div class="riep-riga"><b>Itinerario</b> — ${esc(itin)}</div>
+      <div class="riep-riga"><b>Rifornimento</b> — ${righeRif}</div>
+      <div class="riep-riga"><b>Chiusura</b> — ${m.rientro.ora ? 'ore ' + esc(m.rientro.ora) + ' km ' + esc(m.rientro.km) + ' · percorso ' + percorsoKm(m) + ' km' : '(non ancora chiuso)'}</div>
+      <div class="riep-riga"><b>Stato</b> — ${m.stato}</div>
+      ${catena.map(c => `<div class="riep-riga">${c}</div>`).join('')}
+    </div>
+    <p style="font-size:0.8rem;color:#64748B;margin:10px 0 8px">Regola l'allineamento se sulla tua stampante il testo non è centrato:</p>
+    <div class="modulo-offset">
+      <button class="offset-btn" onclick="offsetModulo(-5,0)">◀</button>
+      <button class="offset-btn" onclick="offsetModulo(0,5)">▲</button>
+      <span class="offset-val">x:${m.offset.x} y:${m.offset.y}</span>
+      <button class="offset-btn" onclick="offsetModulo(0,-5)">▼</button>
+      <button class="offset-btn" onclick="offsetModulo(5,0)">▶</button>
+    </div>
+    <button class="btn btn-primary" onclick="generaPdf106()">📄 Genera Mod. 106 PDF</button>
+    <button class="btn btn-backup" style="margin-top:8px" onclick="eliminaModulo('${m.id}')">🗑 Elimina questo modulo</button>
+    <div class="wizard-nav">
+      <button class="btn btn-backup" onclick="vaiStep(4)">← Indietro</button>
+      <button class="btn btn-backup" onclick="leggiEditorModulo();salvaModuloCorrente();renderModuli()">Torna alla lista</button>
+    </div>`;
+}
+
+// ── RIFORNIMENTO (pagina 3 del wizard) ──
+// Due scelte chiare: A) nessun rifornimento -> si procede alla chiusura;
+// B) rifornimento effettuato -> campi + eventuale divisione del modulo.
 function renderRifornimento(m) {
   const r = m.rifornimento;
+  const modificabile = m.stato !== 'Chiuso' && m.stato !== 'Stampato';
+
   if (!r) {
-    return `<p style="font-size:0.82rem;color:#64748B;margin-bottom:8px">Nessun rifornimento per questo modulo.</p>
-      <button class="btn btn-backup" onclick="aggiungiRifornimento()">⛽ Aggiungi rifornimento</button>`;
+    return `
+      <p class="imp-nota">Hai effettuato un rifornimento durante questo servizio?</p>
+      <button class="btn btn-primary" onclick="vaiStep(4)">Nessun rifornimento — procedi alla chiusura finale →</button>
+      ${modificabile ? `<button class="btn btn-backup" style="margin-top:8px" onclick="aggiungiRifornimento()">⛽ Ho effettuato un rifornimento</button>` : ''}`;
   }
+
   const tipi = ['gasolio', 'benzina', 'supercarburante', 'altro'];
   const opzTipo = tipi.map(t => `<option value="${t}"${r.tipo === t ? ' selected' : ''}>${t.charAt(0).toUpperCase() + t.slice(1)}</option>`).join('');
+
+  // Scelta esplicita della partenza del nuovo modulo (mai silenziosa)
+  const ana = caricaAnagrafica();
+  const sedePredef = ana.partenza || m.partenza || 'Aeroporto di Bologna';
+  const sceltaPartenza = `
+    <div class="campo" style="margin-top:12px"><label>Partenza del nuovo modulo (dopo la divisione)</label>
+      <div class="rif-partenza-opzioni">
+        <label class="rif-radio"><input type="radio" name="rif-partenza" value="rifornimento" checked> Luogo del rifornimento</label>
+        <label class="rif-radio"><input type="radio" name="rif-partenza" value="sede"> Sede predefinita (${esc(sedePredef)})</label>
+        <label class="rif-radio"><input type="radio" name="rif-partenza" value="altro"> Altro luogo:</label>
+        <input type="text" id="rif-partenza-altro" placeholder="Scrivi il luogo" style="margin-top:4px">
+      </div>
+    </div>`;
+
   return `
     <div class="campo"><label>Tipo carburante</label><select id="rif-tipo">${opzTipo}</select></div>
     <div class="riga-due">
@@ -4228,19 +4396,24 @@ function renderRifornimento(m) {
     <div class="campo"><label>Costo al litro (€, opzionale)</label><input type="text" inputmode="decimal" id="rif-costolitro" placeholder="es. 1,62" value="${esc(r.costoLitro)}"></div>
     <div class="riga-due">
       <div class="campo"><label>Data</label><input type="date" id="rif-data" value="${esc(r.data)}"></div>
-      <div class="campo"><label>Ora</label><input type="text" inputmode="numeric" id="rif-ora" placeholder="HH:MM" value="${esc(r.ora)}" onblur="gestisciInputOra(this)"></div>
+      <div class="campo"><label>Ora rifornimento</label><input type="text" inputmode="numeric" id="rif-ora" placeholder="HH:MM" value="${esc(r.ora)}" onblur="gestisciInputOra(this)"></div>
     </div>
     <div class="campo"><label>Luogo / distributore</label><input type="text" id="rif-luogo" value="${esc(r.luogo)}"></div>
     <div class="campo"><label>Km al rifornimento</label><input type="text" inputmode="numeric" id="rif-km" value="${esc(r.km)}"></div>
     <div class="campo"><label>N° tessera carburante (opzionale)</label><input type="text" id="rif-tessera" placeholder="es. 123456" value="${esc(r.tessera || '')}"></div>
     <div class="campo"><label>Note</label><input type="text" id="rif-note" value="${esc(r.note)}"></div>
-    <button class="btn btn-backup" onclick="eliminaRifornimento()">🗑 Elimina rifornimento</button>
-    ${!m.moduloSuccessivo && m.stato !== 'Chiuso' && m.stato !== 'Stampato' ? `
+    ${modificabile ? `<button class="btn btn-backup" onclick="eliminaRifornimento()">🗑 Elimina rifornimento (torna a "Nessun rifornimento")</button>` : ''}
+    ${modificabile && !m.moduloSuccessivo ? `
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid #E2E8F0">
-      <p class="imp-nota">Nella prassi, dopo il rifornimento si chiude il modulo e se ne apre uno nuovo. Compila i km al rifornimento, poi:</p>
-      <button class="btn btn-primary" onclick="chiudiAlRifornimento()">⛽ Chiudi al rifornimento e apri nuovo modulo</button>
+      <p class="imp-nota">Hai registrato un rifornimento: il modulo va chiuso qui e continuato in un nuovo Mod. 106. In alternativa, elimina il rifornimento per procedere alla chiusura normale.</p>
+      ${sceltaPartenza}
+      <button class="btn btn-primary" id="btn-dividi-rif" onclick="chiudiAlRifornimento()">⛽ Chiudi qui e crea il nuovo Mod. 106</button>
     </div>` : ''}
-    ${m.moduloSuccessivo ? `<p class="imp-nota" style="margin-top:10px">→ Da questo modulo è già stato aperto un modulo successivo (vedi lista).</p>` : ''}`;
+    ${m.moduloSuccessivo ? `
+      <p class="imp-nota" style="margin-top:10px">→ Da questo modulo è già stato aperto un modulo successivo (vedi lista).</p>
+      <button class="btn btn-backup" style="margin-top:6px" onclick="vaiStep(4)">Procedi alla chiusura finale →</button>` : ''}
+    ${!modificabile && !m.moduloSuccessivo ? `
+      <button class="btn btn-backup" style="margin-top:10px" onclick="vaiStep(4)">Procedi alla chiusura →</button>` : ''}`;
 }
 
 function aggiungiRifornimento() {
@@ -4422,29 +4595,40 @@ function aggiornaPercorso() {
 // ── CHIUSURA ──
 function chiudiModulo() {
   leggiEditorModulo();
+  // Un rifornimento registrato e non ancora diviso impedisce la chiusura
+  // normale: o si divide il modulo al rifornimento, o si elimina il
+  // rifornimento (pagina 3).
+  if (MODULO_CORRENTE.rifornimento && !MODULO_CORRENTE.moduloSuccessivo) {
+    alert('Questo modulo contiene un rifornimento: chiudilo al rifornimento creando il nuovo Mod. 106 (pagina 3), oppure elimina il rifornimento per chiudere normalmente.');
+    MODULO_STEP_CORRENTE = 3;
+    renderEditorModulo();
+    return;
+  }
   if (!MODULO_CORRENTE.rientro.ora) { alert('Inserisci l\'ora di rientro.'); return; }
   MODULO_CORRENTE.stato = 'Chiuso';
   salvaModuloCorrente();
   toast('🏁 Modulo chiuso');
+  MODULO_STEP_CORRENTE = 5;   // dopo la chiusura si passa al riepilogo
   renderEditorModulo();
 }
 
 // ── CATENA RIFORNIMENTO ──
-// Nella prassi, dopo un rifornimento si chiude il Mod. 106 in corso e se ne
-// apre uno nuovo. Questa funzione lo fa con conferma esplicita:
-//  - chiude il modulo corrente usando i km del rifornimento come km rientro
-//  - crea un nuovo modulo in stato Aperto che parte dai km del rifornimento
-//  - collega i due moduli (moduloPrecedente / moduloSuccessivo)
-// Niente stampa automatica: il nuovo modulo resta da rivedere e completare.
+// Divide il servizio in due Mod. 106 al momento del rifornimento.
+// DOPO CONFERMA ESPLICITA, i valori vengono SEMPRE impostati (sovrascrivendo
+// eventuali valori provvisori):
+//   primo modulo:  rientro.ora = rifornimento.ora, rientro.km = rifornimento.km
+//   secondo modulo: uscita.ora = rifornimento.ora, uscita.km = rifornimento.km
+// La partenza del secondo modulo è scelta esplicitamente dall'utente.
+// Creazione atomica: entrambi i moduli salvati in un unico setItem.
+let DIVISIONE_IN_CORSO = false;
+
 function chiudiAlRifornimento() {
+  if (DIVISIONE_IN_CORSO) return;          // anti doppio tocco
   leggiEditorModulo();
   const m = MODULO_CORRENTE;
   const r = m.rifornimento;
 
-  // Requisiti minimi, senza i quali non si può dividere il percorso:
-  // servono SIA i km SIA l'ora del rifornimento, perché il primo modulo
-  // chiude con ora rientro = ora rifornimento e il secondo parte con
-  // ora uscita = ora rifornimento. Senza ora, la catena è incompleta.
+  // ── Protezioni ──
   if (!r) { alert('Aggiungi prima un rifornimento a questo modulo.'); return; }
   if (!r.km || !String(r.km).trim() || !r.ora || !String(r.ora).trim()) {
     alert('Per dividere il Mod. 106 servono sia i km al rifornimento sia l\'ora del rifornimento.');
@@ -4454,72 +4638,132 @@ function chiudiAlRifornimento() {
     alert('Da questo modulo è già stato creato un modulo successivo. Aprilo dalla lista.');
     return;
   }
-
-  // Riepilogo di conferma con i numeri reali
   const kmRif = String(r.km).trim();
-  const kmUscita = m.uscita.km ? String(m.uscita.km).trim() : '';
-  let percorso = '';
-  const u = parseFloat(kmUscita), k = parseFloat(kmRif);
-  if (!isNaN(u) && !isNaN(k) && k >= u) percorso = String(k - u);
   const oraRif = String(r.ora).trim();
-  const ripartenza = (r.luogo && r.luogo.trim()) ? r.luogo.trim() : (m.partenza || '');
+  const u = parseFloat(String(m.uscita.km).trim()), k = parseFloat(kmRif);
+  if (isNaN(u)) {
+    alert('Compila prima i km di uscita nella pagina 1: servono per calcolare il percorso.');
+    return;
+  }
+  if (isNaN(k) || k < u) {
+    alert('I km al rifornimento (' + kmRif + ') non possono essere inferiori ai km di uscita (' + m.uscita.km + ').');
+    return;
+  }
+  const percorso = String(k - u);
 
-  const msg = 'Chiudere questo Mod. 106 al rifornimento e aprirne uno nuovo?\n\n' +
-    '— Questo modulo verrà CHIUSO con:\n' +
-    '   rientro ore ' + oraRif + ', contachilometri ' + kmRif +
-    (percorso ? ' (percorso ' + percorso + ' km)' : '') + '\n\n' +
-    '— Il NUOVO modulo partirà con:\n' +
-    '   uscita ore ' + oraRif + ', contachilometri ' + kmRif + '\n' +
-    '   partenza: ' + ripartenza + '\n' +
-    '   stesso conducente, mezzo e motivo (modificabili).\n\n' +
-    'Il nuovo modulo resta in bozza: potrai controllare tutto prima di stampare.';
-  if (!confirm(msg)) return;
+  // ── Numero del nuovo modulo: mai copiato in silenzio ──
+  // Se il numero del primo è un intero puro, propongo il successivo;
+  // altrimenti resta vuoto e va verificato in pagina 1. In entrambi i casi
+  // il banner chiede di controllarlo.
+  let numeroNuovo = '';
+  const numAttuale = String(m.numero || '').trim();
+  if (/^\d+$/.test(numAttuale)) numeroNuovo = String(parseInt(numAttuale, 10) + 1);
 
-  // 1) Chiudo il modulo corrente al rifornimento
-  if (!m.rientro.ora) m.rientro.ora = oraRif;
-  if (!m.rientro.km) m.rientro.km = kmRif;
-  m.stato = 'Chiuso';
+  // ── Data del nuovo modulo: stessa del primo, MA se l'ora del rifornimento
+  // è precedente all'ora di uscita il servizio ha attraversato la mezzanotte:
+  // propongo il giorno successivo. La data è mostrata nella conferma e resta
+  // modificabile in pagina 1 — nessun cambio nascosto.
+  const dataPrimo = dataModulo(m);
+  let dataNuovo = dataPrimo;
+  if (m.uscita.ora && oraRif < m.uscita.ora) {
+    const d = new Date(dataPrimo + 'T12:00:00');
+    d.setDate(d.getDate() + 1);
+    dataNuovo = d.toISOString().slice(0, 10);
+  }
 
-  // 2) Creo il nuovo modulo che riparte dal rifornimento
-  const nuovo = {
-    id: 'm' + Date.now().toString(36),
-    turnoId: m.turnoId || null,
-    stato: 'Aperto',
-    numero: '',
-    ufficio: m.ufficio || '',
-    conducente: m.conducente || '',
-    ordineDi: m.ordineDi || '',
-    targa: m.targa || '',
-    modello: m.modello || '',
-    mezzo: m.mezzo || 'Autovettura',
-    motivo: m.motivo || '',
-    partenza: ripartenza,
-    uscita: { ora: oraRif, km: kmRif },
-    rientro: { ora: '', km: '' },
-    tappe: [],
-    rapporto: { guasti: '', comunicazioni: '' },
-    rifornimento: null,
-    moduloPrecedente: m.id,
-    moduloSuccessivo: null,
-    itinerarioModo: m.itinerarioModo || 'sintetico',
-    offset: { x: m.offset.x, y: m.offset.y },
-    creato: Date.now(),
-    aggiornato: Date.now()
-  };
+  // ── Partenza del nuovo modulo: scelta esplicita dai radio ──
+  const scelta = document.querySelector('input[name="rif-partenza"]:checked');
+  const tipoPartenza = scelta ? scelta.value : 'rifornimento';
+  let ripartenza = '';
+  if (tipoPartenza === 'rifornimento') {
+    ripartenza = (r.luogo && r.luogo.trim()) ? r.luogo.trim() : '';
+    if (!ripartenza) {
+      alert('Hai scelto di ripartire dal luogo del rifornimento, ma il campo "Luogo / distributore" è vuoto. Compilalo o scegli un\'altra partenza.');
+      return;
+    }
+  } else if (tipoPartenza === 'sede') {
+    const ana = caricaAnagrafica();
+    ripartenza = ana.partenza || m.partenza || 'Aeroporto di Bologna';
+  } else {
+    const altroEl = document.getElementById('rif-partenza-altro');
+    ripartenza = altroEl ? altroEl.value.trim() : '';
+    if (!ripartenza) {
+      alert('Hai scelto "Altro luogo": scrivi il luogo di partenza del nuovo modulo.');
+      return;
+    }
+  }
 
-  // 3) Collego i due moduli e salvo entrambi
-  m.moduloSuccessivo = nuovo.id;
-  m.aggiornato = Date.now();
-  const moduli = caricaModuli();
-  const idx = moduli.findIndex(x => x.id === m.id);
-  if (idx >= 0) moduli[idx] = m; else moduli.push(m);
-  moduli.push(nuovo);
-  salvaModuliStorage(moduli);
+  // ── Riepilogo di conferma ──
+  const msg = 'Il modulo corrente sarà chiuso:\n' +
+    '   alle ore ' + oraRif + '\n' +
+    '   al km ' + kmRif + '\n' +
+    '   percorso: ' + percorso + ' km\n\n' +
+    'Il nuovo modulo partirà:\n' +
+    '   in data ' + formattaData(dataNuovo) + (dataNuovo !== dataPrimo ? ' (giorno successivo: rifornimento dopo mezzanotte)' : '') + '\n' +
+    '   alle ore ' + oraRif + '\n' +
+    '   dal km ' + kmRif + '\n' +
+    '   da ' + ripartenza + '\n' +
+    '   numero: ' + (numeroNuovo ? numeroNuovo + ' (proposto, da verificare)' : '(da assegnare in pagina 1)') + '\n\n' +
+    'Confermi?';
 
-  // 4) Apro il nuovo modulo nell'editor per il controllo
-  MODULO_CORRENTE = nuovo;
-  toast('⛽ Modulo chiuso al rifornimento - nuovo modulo aperto');
-  renderEditorModulo();
+  const btn = document.getElementById('btn-dividi-rif');
+  DIVISIONE_IN_CORSO = true;
+  if (btn) btn.disabled = true;
+  try {
+    if (!confirm(msg)) return;  // annullato: nessuna modifica (finally riabilita)
+
+    // ── Primo modulo: SEMPRE sovrascritto ai valori del rifornimento ──
+    m.rientro.ora = oraRif;
+    m.rientro.km = kmRif;
+    m.stato = 'Chiuso';
+    m.aggiornato = Date.now();
+
+    // ── Secondo modulo ──
+    const nuovo = {
+      id: 'm' + Date.now().toString(36),
+      turnoId: m.turnoId || null,
+      stato: 'Aperto',
+      numero: numeroNuovo,
+      data: dataNuovo,
+      ufficio: m.ufficio || '',
+      conducente: m.conducente || '',
+      ordineDi: m.ordineDi || '',
+      targa: m.targa || '',
+      modello: m.modello || '',
+      mezzo: m.mezzo || 'Autovettura',
+      motivo: m.motivo || '',
+      partenza: ripartenza,
+      uscita: { ora: oraRif, km: kmRif },
+      rientro: { ora: '', km: '' },
+      tappe: [],
+      rapporto: { guasti: '', comunicazioni: '' },
+      rifornimento: null,                 // il nuovo NON eredita il rifornimento
+      moduloPrecedente: m.id,
+      moduloSuccessivo: null,
+      itinerarioModo: m.itinerarioModo || 'sintetico',
+      offset: { x: m.offset.x, y: m.offset.y },
+      creato: Date.now(),
+      aggiornato: Date.now()
+    };
+    m.moduloSuccessivo = nuovo.id;
+
+    // ── Salvataggio ATOMICO: entrambi i moduli in un unico setItem ──
+    const moduli = caricaModuli();
+    const idx = moduli.findIndex(x => x.id === m.id);
+    if (idx >= 0) moduli[idx] = m; else moduli.push(m);
+    moduli.push(nuovo);
+    salvaModuliStorage(moduli);
+
+    // ── Apro il nuovo modulo alla pagina 1 per il controllo ──
+    MODULO_CORRENTE = nuovo;
+    MODULO_STEP_CORRENTE = 1;
+    MODULO_AVVISO = 'Nuovo Mod. 106 creato dal rifornimento. Controlla i dati e il numero del nuovo Mod. 106, poi premi Procedi.';
+    toast('⛽ Modulo chiuso al rifornimento');
+    renderEditorModulo();
+  } finally {
+    DIVISIONE_IN_CORSO = false;
+    if (btn) btn.disabled = false;
+  }
 }
 
 // ── OFFSET stampante ──
