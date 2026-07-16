@@ -434,6 +434,90 @@
       margin-top: 10px;
     }
     .modulo-allegati { background: #DBEAFE; color: #1E40AF; }
+
+    /* ── EDITOR DI RITAGLIO ───────────────────────────── */
+    .crop-overlay {
+      position: fixed; inset: 0;
+      background: #0F172A;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .crop-testa {
+      padding: 12px 14px 8px;
+      color: #F1F5F9;
+      font-size: 0.9rem;
+      font-weight: 700;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .crop-suggerimento {
+      font-size: 0.72rem;
+      font-weight: 400;
+      color: #94A3B8;
+      margin-top: 3px;
+    }
+    .crop-palco {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 4px;
+    }
+    .crop-area {
+      position: relative;
+      touch-action: none;
+      line-height: 0;
+    }
+    .crop-area canvas { display: block; max-width: 100%; }
+    .crop-rett {
+      position: absolute;
+      border: 2px solid #fff;
+      /* oscura tutto ciò che sta fuori dal ritaglio */
+      box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.62);
+      box-sizing: border-box;
+      cursor: move;
+    }
+    .crop-h {
+      position: absolute;
+      width: 18px; height: 18px;
+      background: #fff;
+      border-radius: 3px;
+      border: 1px solid #2563EB;
+    }
+    .crop-h-tl { left: -10px; top: -10px; }
+    .crop-h-tr { right: -10px; top: -10px; }
+    .crop-h-bl { left: -10px; bottom: -10px; }
+    .crop-h-br { right: -10px; bottom: -10px; }
+    .crop-barra {
+      display: flex;
+      gap: 6px;
+      padding: 10px;
+      background: #1E293B;
+      flex-shrink: 0;
+    }
+    .crop-btn {
+      flex: 1;
+      padding: 12px 4px;
+      border: 1px solid #475569;
+      border-radius: 9px;
+      background: #334155;
+      color: #E2E8F0;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .crop-btn:active { background: #475569; }
+    .crop-btn-ok {
+      background: #2563EB;
+      border-color: #2563EB;
+      color: #fff;
+    }
+    .crop-btn:disabled { opacity: 0.5; }
     .pdf-completo-box {
       margin-top: 12px;
       padding: 11px;
@@ -4791,25 +4875,32 @@ const PROFILI_FOTO = {
 };
 const MAX_BYTE_FOTO = 500 * 1024;   // tetto di sicurezza: oltre, ricomprimo
 
-async function comprimiImmagine(file, tipo) {
-  const p = PROFILI_FOTO[tipo] || PROFILI_FOTO.scontrino;
-  let bitmap;
+// Decodifica un file/blob immagine correggendo l'orientamento EXIF.
+// Ritorna un ImageBitmap già dritto e pronto da disegnare.
+async function decodificaImmagine(file) {
   try {
     // imageOrientation: 'from-image' applica l'EXIF (foto ruotate da telefono)
-    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    return await createImageBitmap(file, { imageOrientation: 'from-image' });
   } catch (e) {
     // Fallback per browser vecchi (iOS < 15): niente opzioni
-    try { bitmap = await createImageBitmap(file); }
+    try { return await createImageBitmap(file); }
     catch (e2) { throw new Error('Formato immagine non supportato. Prova a scattare la foto invece di sceglierla dai file.'); }
   }
+}
+
+// Ridimensiona e comprime una sorgente già decodificata (ImageBitmap o
+// canvas). Stessi profili e stessa qualità di sempre: cambia solo il fatto
+// che accetta una sorgente generica, così anche il ritaglio usa questa
+// identica pipeline senza una seconda compressione JPEG.
+async function comprimiSorgente(sorgente, tipo) {
+  const p = PROFILI_FOTO[tipo] || PROFILI_FOTO.scontrino;
   // Ridimensiono mantenendo le proporzioni: mai deformazioni
-  const scala = Math.min(1, p.lato / Math.max(bitmap.width, bitmap.height));
-  const w = Math.round(bitmap.width * scala), h = Math.round(bitmap.height * scala);
+  const scala = Math.min(1, p.lato / Math.max(sorgente.width, sorgente.height));
+  const w = Math.round(sorgente.width * scala), h = Math.round(sorgente.height * scala);
   const canvas = document.createElement('canvas');
   canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  bitmap.close && bitmap.close();
+  ctx.drawImage(sorgente, 0, 0, w, h);
 
   let blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', p.qualita));
   if (!blob) throw new Error('compressione non riuscita');
@@ -4822,6 +4913,7 @@ async function comprimiImmagine(file, tipo) {
 }
 
 // ── ACQUISIZIONE dal file input (fotocamera o galleria) ──
+// La foto non viene salvata subito: si apre prima l'editor di ritaglio.
 let FOTO_IN_CORSO = false;
 
 async function acquisisciFoto(input, tipo) {
@@ -4835,9 +4927,237 @@ async function acquisisciFoto(input, tipo) {
   // durante lo scatto, questa è la copia buona di ciò che c'è a schermo.
   salvaDatiRifornimentoDaDom();
   FOTO_IN_CORSO = true;
-  toast('📷 Elaborazione foto...');
+  toast('📷 Apertura ritaglio...');
   try {
-    const { blob, larghezza, altezza } = await comprimiImmagine(file, tipo);
+    const src = await decodificaImmagine(file);
+    apriEditorCrop(tipo, src);
+  } catch (e) {
+    alert('Impossibile aprire la foto: ' + e.message);
+  } finally {
+    FOTO_IN_CORSO = false;
+  }
+}
+
+// Ritaglia una foto già salvata: la versione salvata diventa la nuova base
+async function apriRitaglio(tipo) {
+  if (FOTO_IN_CORSO) return;
+  if (!MODULO_CORRENTE) return;
+  salvaDatiRifornimentoDaDom();     // non perdere i campi compilati
+  FOTO_IN_CORSO = true;
+  try {
+    const rec = await leggiAllegato(MODULO_CORRENTE.id, tipo);
+    if (!rec) { toast('Nessuna fotografia da ritagliare'); return; }
+    const src = await decodificaImmagine(rec.blob);
+    apriEditorCrop(tipo, src);
+  } catch (e) {
+    alert('Impossibile aprire la foto: ' + e.message);
+  } finally {
+    FOTO_IN_CORSO = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  EDITOR DI RITAGLIO (nativo: canvas + overlay + Pointer Events)
+//  È un overlay appeso al body: la pagina del wizard resta intatta
+//  sotto, quindi nessun campo del rifornimento viene toccato.
+//  Ritaglio libero, senza proporzioni fisse. Niente dipendenze.
+// ═══════════════════════════════════════════════════════════
+let CROP_SRC = null;     // ImageBitmap o canvas: immagine corrente, già dritta
+let CROP_TIPO = null;    // 'scontrino' | 'tessera'
+let CROP_SCALA = 1;      // display / immagine
+let CROP_RETT = null;    // rettangolo di ritaglio in coordinate display
+const CROP_MIN = 40;     // lato minimo del ritaglio (display px)
+const CROP_TOLL = 26;    // raggio di presa degli angoli: generoso per le dita
+
+// Tiene il rettangolo dentro l'immagine e non più piccolo del minimo
+function clampRettCrop(r, maxW, maxH) {
+  const w = Math.max(CROP_MIN, Math.min(r.w, maxW));
+  const h = Math.max(CROP_MIN, Math.min(r.h, maxH));
+  const x = Math.max(0, Math.min(r.x, maxW - w));
+  const y = Math.max(0, Math.min(r.y, maxH - h));
+  return { x, y, w, h };
+}
+
+// Rettangolo di ritaglio convertito in coordinate immagine (per il salvataggio)
+function rettCropInImmagine() {
+  const sx = Math.round(CROP_RETT.x / CROP_SCALA);
+  const sy = Math.round(CROP_RETT.y / CROP_SCALA);
+  const sw = Math.round(CROP_RETT.w / CROP_SCALA);
+  const sh = Math.round(CROP_RETT.h / CROP_SCALA);
+  return {
+    sx: Math.max(0, Math.min(sx, CROP_SRC.width - 1)),
+    sy: Math.max(0, Math.min(sy, CROP_SRC.height - 1)),
+    sw: Math.max(1, Math.min(sw, CROP_SRC.width - sx)),
+    sh: Math.max(1, Math.min(sh, CROP_SRC.height - sy))
+  };
+}
+
+function apriEditorCrop(tipo, sorgente) {
+  CROP_TIPO = tipo;
+  CROP_SRC = sorgente;
+  const ov = document.createElement('div');
+  ov.className = 'crop-overlay';
+  ov.id = 'crop-overlay';
+  ov.innerHTML = `
+    <div class="crop-testa">✂️ Ritaglia: ${PROFILI_FOTO[tipo].etichetta}
+      <div class="crop-suggerimento">Trascina il rettangolo o gli angoli per tenere solo la parte utile</div>
+    </div>
+    <div class="crop-palco">
+      <div class="crop-area" id="crop-area">
+        <canvas id="crop-canvas"></canvas>
+        <div class="crop-rett" id="crop-rett">
+          <span class="crop-h crop-h-tl"></span><span class="crop-h crop-h-tr"></span>
+          <span class="crop-h crop-h-bl"></span><span class="crop-h crop-h-br"></span>
+        </div>
+      </div>
+    </div>
+    <div class="crop-barra">
+      <button class="crop-btn" onclick="chiudiEditorCrop()">Annulla</button>
+      <button class="crop-btn" onclick="reimpostaCrop()">Reimposta</button>
+      <button class="crop-btn" onclick="ruotaCrop()">↻ Ruota 90°</button>
+      <button class="crop-btn crop-btn-ok" id="crop-salva" onclick="salvaCrop()">Salva ritaglio</button>
+    </div>`;
+  document.body.appendChild(ov);
+  disegnaCrop();
+  reimpostaCrop();
+  attivaGestiCrop();
+}
+
+function chiudiEditorCrop() {
+  const ov = document.getElementById('crop-overlay');
+  if (ov) document.body.removeChild(ov);
+  if (CROP_SRC && CROP_SRC.close) CROP_SRC.close();
+  CROP_SRC = null; CROP_RETT = null; CROP_TIPO = null;
+}
+
+// Disegna l'immagine scalata per stare nello schermo
+function disegnaCrop() {
+  const maxW = Math.max(120, window.innerWidth - 24);
+  const maxH = Math.max(120, window.innerHeight - 190);
+  CROP_SCALA = Math.min(maxW / CROP_SRC.width, maxH / CROP_SRC.height, 1);
+  const dw = Math.max(1, Math.round(CROP_SRC.width * CROP_SCALA));
+  const dh = Math.max(1, Math.round(CROP_SRC.height * CROP_SCALA));
+  const cv = document.getElementById('crop-canvas');
+  cv.width = dw; cv.height = dh;
+  cv.getContext('2d').drawImage(CROP_SRC, 0, 0, dw, dh);
+  const area = document.getElementById('crop-area');
+  area.style.width = dw + 'px';
+  area.style.height = dh + 'px';
+}
+
+// Reimposta il ritaglio all'intera immagine
+function reimpostaCrop() {
+  const cv = document.getElementById('crop-canvas');
+  CROP_RETT = { x: 0, y: 0, w: cv.width, h: cv.height };
+  aggiornaRettCrop();
+}
+
+function aggiornaRettCrop() {
+  const el = document.getElementById('crop-rett');
+  if (!el || !CROP_RETT) return;
+  el.style.left = CROP_RETT.x + 'px';
+  el.style.top = CROP_RETT.y + 'px';
+  el.style.width = CROP_RETT.w + 'px';
+  el.style.height = CROP_RETT.h + 'px';
+}
+
+// Ruota l'immagine di 90° in senso orario e riparte da ritaglio pieno
+function ruotaCrop() {
+  const c = document.createElement('canvas');
+  c.width = CROP_SRC.height; c.height = CROP_SRC.width;
+  const ctx = c.getContext('2d');
+  ctx.translate(c.width / 2, c.height / 2);
+  ctx.rotate(Math.PI / 2);
+  ctx.drawImage(CROP_SRC, -CROP_SRC.width / 2, -CROP_SRC.height / 2);
+  if (CROP_SRC.close) CROP_SRC.close();
+  CROP_SRC = c;
+  disegnaCrop();
+  reimpostaCrop();
+}
+
+// Trascinamento del rettangolo e degli angoli con Pointer Events
+function attivaGestiCrop() {
+  const area = document.getElementById('crop-area');
+  let modo = null, px0 = 0, py0 = 0, rett0 = null;
+
+  function puntoLocale(ev) {
+    const b = area.getBoundingClientRect();
+    return { x: ev.clientX - b.left, y: ev.clientY - b.top };
+  }
+  // Decide cosa si sta afferrando: un angolo (se vicino) o il rettangolo
+  function modoDaPunto(p) {
+    const r = CROP_RETT;
+    const ang = {
+      tl: { x: r.x, y: r.y }, tr: { x: r.x + r.w, y: r.y },
+      bl: { x: r.x, y: r.y + r.h }, br: { x: r.x + r.w, y: r.y + r.h }
+    };
+    for (const k in ang) {
+      if (Math.hypot(p.x - ang[k].x, p.y - ang[k].y) <= CROP_TOLL) return k;
+    }
+    if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) return 'move';
+    return null;
+  }
+
+  area.addEventListener('pointerdown', ev => {
+    const p = puntoLocale(ev);
+    modo = modoDaPunto(p);
+    if (!modo) return;
+    ev.preventDefault();
+    px0 = p.x; py0 = p.y;
+    rett0 = Object.assign({}, CROP_RETT);
+    area.setPointerCapture(ev.pointerId);
+  });
+
+  area.addEventListener('pointermove', ev => {
+    if (!modo) return;
+    ev.preventDefault();
+    const p = puntoLocale(ev);
+    const dx = p.x - px0, dy = p.y - py0;
+    const cv = document.getElementById('crop-canvas');
+    const maxW = cv.width, maxH = cv.height;
+    let r;
+    if (modo === 'move') {
+      r = { x: rett0.x + dx, y: rett0.y + dy, w: rett0.w, h: rett0.h };
+      r.x = Math.max(0, Math.min(r.x, maxW - r.w));
+      r.y = Math.max(0, Math.min(r.y, maxH - r.h));
+    } else {
+      // Ridimensionamento dall'angolo afferrato: l'angolo opposto resta fermo
+      let x1 = rett0.x, y1 = rett0.y, x2 = rett0.x + rett0.w, y2 = rett0.y + rett0.h;
+      if (modo === 'tl') { x1 += dx; y1 += dy; }
+      if (modo === 'tr') { x2 += dx; y1 += dy; }
+      if (modo === 'bl') { x1 += dx; y2 += dy; }
+      if (modo === 'br') { x2 += dx; y2 += dy; }
+      x1 = Math.max(0, Math.min(x1, maxW)); x2 = Math.max(0, Math.min(x2, maxW));
+      y1 = Math.max(0, Math.min(y1, maxH)); y2 = Math.max(0, Math.min(y2, maxH));
+      r = { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) };
+      if (r.w < CROP_MIN) r.w = CROP_MIN;
+      if (r.h < CROP_MIN) r.h = CROP_MIN;
+    }
+    CROP_RETT = clampRettCrop(r, maxW, maxH);
+    aggiornaRettCrop();
+  });
+
+  const fine = ev => {
+    if (!modo) return;
+    modo = null;
+    try { area.releasePointerCapture(ev.pointerId); } catch (e) { /* già rilasciato */ }
+  };
+  area.addEventListener('pointerup', fine);
+  area.addEventListener('pointercancel', fine);
+}
+
+// Salva SOLO la versione ritagliata, con la stessa pipeline di compressione
+async function salvaCrop() {
+  if (!CROP_SRC || !MODULO_CORRENTE) return;
+  const btn = document.getElementById('crop-salva');
+  if (btn) btn.disabled = true;
+  const tipo = CROP_TIPO;
+  try {
+    const { sx, sy, sw, sh } = rettCropInImmagine();
+    const c = document.createElement('canvas');
+    c.width = sw; c.height = sh;
+    c.getContext('2d').drawImage(CROP_SRC, sx, sy, sw, sh, 0, 0, sw, sh);
+    const { blob, larghezza, altezza } = await comprimiSorgente(c, tipo);
     await salvaAllegato({
       id: idAllegato(MODULO_CORRENTE.id, tipo),
       moduloId: MODULO_CORRENTE.id,
@@ -4848,16 +5168,16 @@ async function acquisisciFoto(input, tipo) {
       dimensione: blob.size,
       larghezza: larghezza,
       altezza: altezza,
-      nomeFile: file.name || (tipo + '.jpg')
+      nomeFile: tipo + '.jpg'
     });
     MODULI_CON_ALLEGATI.add(MODULO_CORRENTE.id);
+    chiudiEditorCrop();
     toast('✅ Foto salvata (' + Math.round(blob.size / 1024) + ' KB)');
     // Aggiorno SOLO i box foto: gli altri campi restano come li hai lasciati
     await renderAllegatiRifornimento(MODULO_CORRENTE.id);
   } catch (e) {
-    alert('Impossibile salvare la foto: ' + e.message);
-  } finally {
-    FOTO_IN_CORSO = false;
+    alert('Impossibile salvare il ritaglio: ' + e.message);
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -4913,6 +5233,7 @@ async function renderAllegatiRifornimento(moduloId) {
           <div class="foto-meta">${rec.larghezza}×${rec.altezza} px · ${kb} KB</div>
           <div class="foto-azioni">
             <button class="btn-mini" onclick="apriFotoIntera('${tipo}')">🔍 Apri</button>
+            <button class="btn-mini" onclick="apriRitaglio('${tipo}')">✂️ Ritaglia</button>
             <button class="btn-mini" onclick="apriFotocamera('${tipo}')">🔄 Sostituisci</button>
             <button class="btn-mini btn-mini-rosso" onclick="confermaEliminaFoto('${tipo}')">🗑 Elimina</button>
           </div>
