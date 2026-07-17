@@ -3232,7 +3232,8 @@ function esportaBackup() {
     controlli:  caricaControlli(),         // soglie, on/off e avvisi ignorati
     moduli:     caricaModuli(),            // bozze Mod. 106
     anagrafica: caricaAnagrafica(),        // dati fissi Mod. 106
-    coords106:  coordsEffettive()          // coordinate personalizzate calibrazione
+    coords106:  coordsEffettive(),         // coordinate personalizzate calibrazione
+    retroOffset106: retroOffsetEffettivo() // offset blocco retro (fallback 0/0 se assente)
   };
 
   // Crea il file e fa partire il download
@@ -3313,6 +3314,11 @@ function importaBackup(event) {
     }
     if (backup.coords106 && typeof backup.coords106 === 'object') {
       salvaCoordsPersonali(backup.coords106);
+    }
+    // Offset retro: opzionale, i backup vecchi non lo hanno. In quel caso
+    // retroOffsetEffettivo() ricadra' comunque sul default 0/0.
+    if (backup.retroOffset106 && typeof backup.retroOffset106 === 'object') {
+      salvaRetroOffset(backup.retroOffset106);
     }
 
     // Aggiorna tutte le schermate con i nuovi dati
@@ -4336,6 +4342,35 @@ function resetCoordsPersonali() {
   localStorage.removeItem(CHIAVE_COORDS);
 }
 
+// ─────────────────────────────────────────────────────────
+//  CALIBRAZIONE FRONTE/RETRO — offset separato dell'INTERA
+//  facciata posteriore del Mod. 106 (blocco unico), pensato
+//  per compensare lo scarto meccanico della stampante in
+//  fronte-retro. Non ha nulla a che vedere con coordsEffettive():
+//  quella sposta i singoli campi di testo (solo sul fronte, dove
+//  vengono scritti); questo sposta l'intera pagina 2 incorporata.
+//  Chiave separata apposta: cosi' un reset dei campi non tocca
+//  l'offset retro e viceversa. Fallback a {0,0} se non impostato
+//  o su dati/backup piu' vecchi che non lo contengono.
+// ─────────────────────────────────────────────────────────
+const CHIAVE_RETRO_OFFSET = 'moduli_retroOffset_106';
+
+function retroOffsetEffettivo() {
+  try {
+    const salv = JSON.parse(localStorage.getItem(CHIAVE_RETRO_OFFSET));
+    if (salv && Number.isFinite(Number(salv.x)) && Number.isFinite(Number(salv.y))) {
+      return { x: Number(salv.x), y: Number(salv.y) };
+    }
+  } catch (e) { /* nessun offset salvato: fallback a zero */ }
+  return { x: 0, y: 0 };
+}
+function salvaRetroOffset(o) {
+  localStorage.setItem(CHIAVE_RETRO_OFFSET, JSON.stringify({ x: Number(o.x) || 0, y: Number(o.y) || 0 }));
+}
+function resetRetroOffset() {
+  localStorage.removeItem(CHIAVE_RETRO_OFFSET);
+}
+
 function caricaModuli() {
   try { return JSON.parse(localStorage.getItem(CHIAVE_MODULI)) || []; }
   catch (e) { return []; }
@@ -4943,6 +4978,11 @@ function renderStep5Riepilogo(m) {
     </div>
     <button class="btn btn-primary" onclick="generaPdf106()">📄 Scarica solo Mod. 106</button>
     <button class="btn btn-backup" style="margin-top:8px" onclick="condividiModulo('${m.id}', this)">📤 Condividi solo Mod. 106</button>
+    <p class="imp-nota" style="margin-top:8px">
+      Per l'allineamento fronte-retro: stampare in formato A4, dimensioni
+      effettive/100%, fronte-retro lato lungo. Disattivare "Adatta",
+      "Riduci pagine grandi" e margini automatici.
+    </p>
     ${(m.rifornimento && MODULI_CON_ALLEGATI.has(m.id)) ? `
     <div class="pdf-completo-box">
       <p class="imp-nota">Con le fotografie del rifornimento puoi generare il PDF completo: 3 pagine, con la copia composita di Mod. 106, scontrino e tessera.</p>
@@ -6151,8 +6191,21 @@ async function creaPdf106Blob(m) {
       const retroEmbed = await outDoc.embedPage(retroTpl);
       const a4retro = outDoc.addPage([A4_W, A4_H]);
       const rW = retroTpl.getWidth(), rH = retroTpl.getHeight();
-      // Il retro ha le stesse dimensioni B5 del fronte: stesso posX/posY
-      a4retro.drawPage(retroEmbed, { x: posX, y: A4_H - rH, xScale: SCALA, yScale: SCALA });
+      // Il retro ha le stesse dimensioni B5 del fronte: stesso posX/posY,
+      // piu' l'offset di calibrazione fronte-retro (spostamento dell'INTERA
+      // facciata come blocco unico — il retro non ha campi di testo propri,
+      // e' un'unica pagina incorporata, quindi non esistono "coordinate dei
+      // singoli campi" da alterare). Applicato una sola volta, qui.
+      const RETRO_OFF = retroOffsetEffettivo();
+      a4retro.drawPage(retroEmbed, {
+        x: posX + RETRO_OFF.x,
+        y: (A4_H - rH) + RETRO_OFF.y,
+        xScale: SCALA, yScale: SCALA
+      });
+      // Il tratteggio di taglio NON riceve l'offset: rappresenta il taglio
+      // fisico, unico e condiviso fra fronte e retro (si ritaglia una sola
+      // volta l'intero foglio A4). E' l'offset a compensare lo scostamento
+      // della stampante rispetto a quel taglio fisso, non il contrario.
       disegnaTaglio(a4retro);
     }
 
@@ -6471,6 +6524,7 @@ function apriAnagrafica106() {
 // ── CALIBRAZIONE CAMPI PDF ──
 // Stato della calibrazione in corso (campo selezionato e passo)
 let CAL_PASSO = 2;
+let CAL_PASSO_RETRO = 1;
 
 function apriCalibrazione106() {
   document.getElementById('moduli-vista-lista').style.display = 'none';
@@ -6478,6 +6532,7 @@ function apriCalibrazione106() {
   const el = document.getElementById('moduli-anagrafica');
   el.style.display = '';
   const c = coordsEffettive();
+  const ro = retroOffsetEffettivo();
 
   const righe = Object.keys(COORDS_106_DEFAULT).map(k => {
     const xy = c[k];
@@ -6513,6 +6568,42 @@ function apriCalibrazione106() {
       <div class="cal-lista">${righe}</div>
 
       <button class="btn btn-backup" style="margin-top:14px" onclick="confermaResetCal()">♻️ Ripristina valori predefiniti</button>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div class="riepilogo-sottotitolo">Allineamento stampa fronte-retro</div>
+      <p class="imp-nota">
+        Se il fronte e il retro coincidono nel PDF ma restano sfalsati una volta
+        stampati, il problema è della stampante in fronte-retro, non del file.
+        Genera la prova qui sotto, stampala fronte-retro, misura con un righello
+        di quanto è spostato il retro rispetto al fronte e inserisci quei
+        millimetri (convertiti in punti: 1 mm ≈ 2,83 pt) come offset qui sotto.
+        L'offset sposta l'intera facciata posteriore come blocco unico: non
+        tocca il fronte, i singoli campi o la pagina 3 del rifornimento.
+      </p>
+
+      <button class="btn btn-backup" onclick="generaProvaFronteRetroDownload()">🧭 Genera prova allineamento fronte-retro</button>
+
+      <div class="cal-passo" style="margin-top:14px">
+        <span>Passo offset retro:</span>
+        <button class="cal-passo-btn" id="cal-passo-retro-05" onclick="setPassoCalRetro(0.5)">0,5 pt</button>
+        <button class="cal-passo-btn attivo" id="cal-passo-retro-1" onclick="setPassoCalRetro(1)">1 pt</button>
+        <button class="cal-passo-btn" id="cal-passo-retro-5" onclick="setPassoCalRetro(5)">5 pt</button>
+      </div>
+
+      <div class="cal-riga" id="cal-riga-retro">
+        <div class="cal-nome">Offset retro X/Y
+          <span class="cal-valore" id="cal-val-retro">x:${ro.x} y:${ro.y} pt</span>
+        </div>
+        <div class="cal-frecce">
+          <button class="cal-fr" onclick="spostaRetro(0,1)">↑</button>
+          <button class="cal-fr" onclick="spostaRetro(-1,0)">←</button>
+          <button class="cal-fr" onclick="spostaRetro(1,0)">→</button>
+          <button class="cal-fr" onclick="spostaRetro(0,-1)">↓</button>
+        </div>
+      </div>
+
+      <button class="btn btn-backup" style="margin-top:14px" onclick="confermaResetRetro()">♻️ Ripristina offset retro</button>
     </div>`;
 }
 
@@ -6543,6 +6634,35 @@ function confermaResetCal() {
   }
 }
 
+function setPassoCalRetro(p) {
+  CAL_PASSO_RETRO = p;
+  ['05','1','5'].forEach(n => {
+    const b = document.getElementById('cal-passo-retro-' + n);
+    if (b) b.classList.toggle('attivo', Number(n === '05' ? 0.5 : n) === p);
+  });
+}
+
+// Sposta l'INTERA facciata posteriore (blocco unico) di CAL_PASSO_RETRO
+// punti nella direzione data (dx, dy in -1/0/1). Non tocca coordsEffettive()
+// ne' i campi del fronte: scrive solo su CHIAVE_RETRO_OFFSET.
+function spostaRetro(dx, dy) {
+  const o = retroOffsetEffettivo();
+  o.x = Math.round((o.x + dx * CAL_PASSO_RETRO) * 10) / 10;
+  o.y = Math.round((o.y + dy * CAL_PASSO_RETRO) * 10) / 10;
+  salvaRetroOffset(o);
+  const val = document.getElementById('cal-val-retro');
+  if (val) val.textContent = `x:${o.x} y:${o.y} pt`;
+}
+
+function confermaResetRetro() {
+  if (confirm('Ripristinare a zero l\'offset di allineamento fronte-retro?')) {
+    resetRetroOffset();
+    const val = document.getElementById('cal-val-retro');
+    if (val) val.textContent = 'x:0 y:0 pt';
+    toast('♻️ Offset retro ripristinato');
+  }
+}
+
 // Genera un PDF di prova con dati di esempio, usando le coordinate correnti.
 // Non tocca MODULO_CORRENTE né lo stato di alcun modulo salvato.
 async function generaPdfProva106() {
@@ -6567,6 +6687,103 @@ async function generaPdfProva106() {
     toast('✅ PDF di prova generato');
   } catch (e) {
     alert('Errore nella generazione del PDF di prova: ' + e.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  TEST DIAGNOSTICO: prova di allineamento fronte-retro.
+//  Pagina di sola misura (nessun dato del modulo, nessun offset
+//  applicato di proposito): stesso B5 del template reale, stessi
+//  riferimenti grafici ALLE STESSE COORDINATE PDF su fronte e
+//  retro. Serve a misurare quanto la stampante sposta fisicamente
+//  il retro in fronte-retro: il valore misurato con un righello
+//  sul foglio stampato e' quello da inserire in Offset retro X/Y.
+//  Non usa mod_106.pdf per i campi: solo per leggere le dimensioni
+//  reali del B5, cosi' il riquadro di prova coincide sempre con
+//  quello usato dal PDF ufficiale.
+// ─────────────────────────────────────────────────────────
+async function generaProvaFronteRetro() {
+  const PDFLib = await caricaPdfLib();
+  const resp = await fetch('./mod_106.pdf');
+  if (!resp.ok) throw new Error('template non trovato');
+  const bytes = await resp.arrayBuffer();
+  const tplDoc = await PDFLib.PDFDocument.load(bytes);
+  const tplPage = tplDoc.getPages()[0];
+
+  const A4_W = 595.28, A4_H = 841.89;
+  const TPL_W = tplPage.getWidth(), TPL_H = tplPage.getHeight();
+  const posX = 0, posY = A4_H - TPL_H;
+  const MM = 72 / 25.4; // 1 mm in punti PDF
+
+  const outDoc = await PDFLib.PDFDocument.create();
+  // Il font va incorporato nel documento su cui si disegna (outDoc), non nel
+  // template: altrimenti le pagine di uscita fanno riferimento a una risorsa
+  // font che nel loro documento non esiste e il testo non viene reso.
+  const font = await outDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+  const grigio = PDFLib.rgb(0.45, 0.45, 0.45);
+  const nero   = PDFLib.rgb(0, 0, 0);
+
+  // Disegna una croce di registro centrata in (cx, cy)
+  function croce(pagina, cx, cy) {
+    pagina.drawLine({ start: { x: cx - 6, y: cy }, end: { x: cx + 6, y: cy }, thickness: 0.75, color: nero });
+    pagina.drawLine({ start: { x: cx, y: cy - 6 }, end: { x: cx, y: cy + 6 }, thickness: 0.75, color: nero });
+  }
+
+  // Disegna una pagina di prova identica (stesse coordinate PDF):
+  // la SOLA differenza fra fronte e retro e' la dicitura testuale.
+  function disegnaPagina(etichetta) {
+    const p = outDoc.addPage([A4_W, A4_H]);
+
+    // Bordo esatto dell'area B5
+    p.drawRectangle({
+      x: posX, y: posY, width: TPL_W, height: TPL_H,
+      borderColor: nero, borderWidth: 0.75
+    });
+
+    // Croci di registro vicino ai 4 angoli + croce centrale
+    const M = 14;
+    croce(p, posX + M,         posY + M);
+    croce(p, posX + TPL_W - M, posY + M);
+    croce(p, posX + M,         posY + TPL_H - M);
+    croce(p, posX + TPL_W - M, posY + TPL_H - M);
+    croce(p, posX + TPL_W / 2, posY + TPL_H / 2);
+
+    // Riferimenti ogni 10 mm sui quattro lati (piccoli trattini)
+    for (let x = 0; x <= TPL_W; x += 10 * MM) {
+      p.drawLine({ start: { x: posX + x, y: posY }, end: { x: posX + x, y: posY + 4 }, thickness: 0.5, color: grigio });
+      p.drawLine({ start: { x: posX + x, y: posY + TPL_H - 4 }, end: { x: posX + x, y: posY + TPL_H }, thickness: 0.5, color: grigio });
+    }
+    for (let y = 0; y <= TPL_H; y += 10 * MM) {
+      p.drawLine({ start: { x: posX, y: posY + y }, end: { x: posX + 4, y: posY + y }, thickness: 0.5, color: grigio });
+      p.drawLine({ start: { x: posX + TPL_W - 4, y: posY + y }, end: { x: posX + TPL_W, y: posY + y }, thickness: 0.5, color: grigio });
+    }
+
+    // Dicitura FRONTE / RETRO
+    p.drawText(etichetta, { x: posX + 16, y: posY + TPL_H - 26, size: 15, font, color: nero });
+
+    // Nota di stampa, in fondo al foglio A4 (fuori dal B5)
+    p.drawText(
+      'Stampare al 100% - dimensioni effettive - fronte/retro lato lungo',
+      { x: posX + 4, y: 18, size: 8, font, color: grigio }
+    );
+    return p;
+  }
+
+  disegnaPagina('FRONTE');
+  disegnaPagina('RETRO');
+
+  const pdfBytes = await outDoc.save();
+  return new Blob([pdfBytes], { type: 'application/pdf' });
+}
+
+async function generaProvaFronteRetroDownload() {
+  toast('📄 Generazione prova fronte-retro...');
+  try {
+    const blob = await generaProvaFronteRetro();
+    scaricaBlob(blob, 'Mod106_prova_fronte_retro.pdf');
+    toast('✅ Prova fronte-retro generata');
+  } catch (e) {
+    alert('Errore nella generazione della prova fronte-retro: ' + e.message);
   }
 }
 
