@@ -9,7 +9,7 @@
    resti bloccato sulla vecchia copia in cache.
    ───────────────────────────────────────────────────────── */
 
-const CACHE = 'turni-ps-v35';
+const CACHE = 'turni-ps-v36';
 
 // File che compongono l'app, salvati per l'uso offline.
 // Percorsi relativi (./) così funzionano nella sottocartella GitHub.
